@@ -772,6 +772,7 @@ function Menu({ me, onClose, onSignOut }: {
         <button className="fm-drawer-item" onClick={() => open({ name: 'myReviews' })}>Mine anmeldelser</button>
         <button className="fm-drawer-item" onClick={() => open({ name: 'myPhotos' })}>Mine billeder</button>
         <button className="fm-drawer-item" onClick={() => open({ name: 'wishlist' })}>Vil gerne besøge</button>
+        <a className="fm-drawer-item" href="/">Til forsiden (Alf og dagbog)</a>
         <button className="fm-drawer-item fm-drawer-out" onClick={() => { onClose(); onSignOut(); }}>Log ud</button>
       </nav>
     </div>,

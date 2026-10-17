@@ -21,6 +21,15 @@ function loadView(): View {
   } catch { return { section: '', tabs: {} }; }
 }
 
+/** /app/#ledger, #familymap, #dagbog, #settings: a link from the front page
+    opens the right place; the hash then follows the navigation. */
+function fromHash(v: View): { view: View; settings: boolean } {
+  const h = window.location.hash.replace(/^#\/?/, '');
+  if (h === 'settings') return { view: v, settings: true };
+  if (/^[a-z]+$/.test(h)) return { view: { ...v, section: h }, settings: false };
+  return { view: v, settings: false };
+}
+
 function saveView(v: View) {
   try { localStorage.setItem(VIEW_KEY, JSON.stringify(v)); } catch { /* private mode */ }
 }
@@ -31,8 +40,9 @@ export function App() {
   const [me, setMe] = useState<AuthUser | null | false>(null);   // null = loading, false = signed out
   const [needsSetup, setNeedsSetup] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [view, setView] = useState<View>(loadView);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [initial] = useState(() => fromHash(loadView()));
+  const [view, setView] = useState<View>(initial.view);
+  const [settingsOpen, setSettingsOpen] = useState(initial.settings);
   const [help, setHelp] = useState<(HelpRequest & { key: number }) | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -60,6 +70,10 @@ export function App() {
   }, []);
 
   useEffect(() => saveView(view), [view]);
+  useEffect(() => {
+    const h = settingsOpen ? '#settings' : view.section ? `#${view.section}` : '';
+    if (h && window.location.hash !== h) window.history.replaceState(null, '', h);
+  }, [view, settingsOpen]);
 
   if (loadError) {
     return (
@@ -74,10 +88,11 @@ export function App() {
   if (me === false) {
     return <LoginScreen appName={appName} needsSetup={needsSetup} onSignedIn={(u) => setMe(u)} />;
   }
-  // A family account has only the family page; every other endpoint refuses it.
+  // A family account has the front page (Alf, Atlas, Dagbog) and nothing
+  // here: every endpoint of this app refuses it.
   if (me.role === 'family') {
-    window.location.replace('/fm/');
-    return <div className="login-wrap"><div className="login-card">Opening the family page…</div></div>;
+    window.location.replace('/');
+    return <div className="login-wrap"><div className="login-card">Opening the front page…</div></div>;
   }
 
   const sections = sectionsFor(me.role);
@@ -106,8 +121,8 @@ export function App() {
           ))}
         </nav>
         <span className="appbar-spacer" />
-        <a className="ghost-btn sm" href="/fm/" data-help="app.familyPage" title="The family's phone page">
-          <span className="wide-only">Family page</span><span className="narrow-only">/fm</span> ↗</a>
+        <a className="ghost-btn sm" href="/" data-help="app.home" title="The front page: Alf, Alf's Atlas, Dagbog">
+          <span className="wide-only">Front page</span><span className="narrow-only">Home</span> ↗</a>
         <button className="ghost-btn sm icon" data-help="app.help" title="Help (Alt + click any control)"
                 onClick={() => openHelp(null)}>?</button>
         {me.role === 'admin' && (

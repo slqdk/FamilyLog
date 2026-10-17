@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ledgerSection } from './ledger';
 import { familyMapSection } from './familymap';
+import { dagbogSection } from './dagbog';
 
 /** What a section brings to the shell. The backend has the matching
     registry in backend/app/sections/__init__.py. Adding a section: a folder
@@ -16,7 +17,7 @@ export interface SectionDef {
   render: (tab: string, onTab: (t: string) => void) => ReactNode;
 }
 
-export const SECTIONS: SectionDef[] = [ledgerSection, familyMapSection];
+export const SECTIONS: SectionDef[] = [ledgerSection, familyMapSection, dagbogSection];
 
 export function sectionsFor(role: string): SectionDef[] {
   return SECTIONS.filter((s) => !s.adminOnly || role === 'admin');

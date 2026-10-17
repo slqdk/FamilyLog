@@ -510,6 +510,76 @@ def card(p: dict) -> dict:
 
 # ---- the job -----------------------------------------------------------------------------------
 
+async def gather(user_id: int, question: str, phone: tuple[float, float] | None,
+                 radius_override: float | None, a: dict, model: str, step) -> dict | None:
+    """Steps 1-4: understand, find where, search, the web. Fills the view
+    `a` as it goes (intent, where, radiusKm, webAdded, relaxed, searched,
+    places) and returns {"where", "radius", "context"} for the answer -
+    or None when there is no place to search around (a["text"] then says
+    so). Split out of run() in FamilyLog 0.2.0, so the front page's chat
+    can ask the same search; the steps are unchanged."""
+    keys = ", ".join(f"{k} ({c['label']})" for k, c in fm.CATEGORIES.items())
+    intent = clean_intent(await _ask_json(model, UNDERSTAND_PROMPT % keys, question))
+    a["intent"] = intent
+
+    where = None
+    if intent["location"]:
+        where = osm.find_locality(intent["location"]) or _place_as_locality(intent["location"])
+    if where is None and phone is not None:
+        where = {"name": "din position", "lat": phone[0], "lng": phone[1], "kind": "phone"}
+    if where is None:
+        a["text"] = ("Jeg kunne ikke finde " + (f"\"{intent['location']}\"" if intent["location"]
+                     else "et sted i spørgsmålet") +
+                     ". Skriv en by (fx Vojens), eller slå \"Nær mig\" til, så jeg kan bruge din position.")
+        return None
+    a["where"] = where["name"]
+    # The page's choice wins; then a distance said in the question; then
+    # the defaults. (2.47.0)
+    radius = radius_override or intent["radiusKm"] or (
+        NEAR_ME_RADIUS_KM if where["kind"] == "phone" else DEFAULT_RADIUS_KM)
+    a["radiusKm"] = radius
+
+    step(f"Søger omkring {where['name']}…", "search")
+    intent = drop_category_words(intent)
+    a["intent"] = intent
+    groups = await asyncio.to_thread(find, (where["lat"], where["lng"]), radius,
+                                     intent, user_id)
+    # Too few fit the words: the web first (2.49.6 - "græsk restaurant i
+    # Flensborg" was answered with the whole category and never asked
+    # the web). Near the phone, the web is asked about the nearest town.
+    web: list[dict] = []
+    if groups["fitting"] < MIN_MATCHES:
+        town = where if where["kind"] != "phone" else (
+            osm.nearest_locality(where["lat"], where["lng"]))
+        if town:
+            step("Finder for lidt - søger på nettet…", "web")
+            known = {p["id"] for g in ("good", "wished", "others") for p in groups[g]}
+            web = [p for p in await web_places(model, intent, town, question, user_id)
+                   if p["id"] not in known]
+            a["webAdded"] = len(web)
+    # Still too few, and there is a category: the rest of it, as its own
+    # group - "if nothing else".
+    rest: list[dict] = []
+    if groups["fitting"] + len(web) < MIN_MATCHES and intent["categories"] \
+            and intent["keywords"]:
+        have = {p["id"] for g in ("good", "wished", "others", "warnings") for p in groups[g]}
+        rest = await asyncio.to_thread(fill, (where["lat"], where["lng"]), radius,
+                                       intent, user_id, have | {p["id"] for p in web})
+    a["relaxed"] = bool(rest)
+    groups["rest"] = rest
+    # What was actually searched for, in words, shown under the answer.
+    what = [fm.CATEGORIES[c]["label"] for c in intent["categories"]] or ["alle slags steder"]
+    used = intent["keywords"]
+    a["searched"] = ", ".join(what) + (f" med \"{', '.join(used)}\"" if used else "") + \
+        (" (ordene også i andre kategorier)" if used and intent["categories"] else "") + \
+        (" - for få, så også resten af kategorien" if rest else "") + \
+        (f", {intent['age']} år" if intent["age"] is not None else "")
+    a["places"] = [card(p) for g in ("good", "wished", "others") for p in groups[g]] + \
+        [card(p) for p in web] + [card(p) for p in rest] + \
+        [card(p) for p in groups["warnings"]]
+    return {"where": where, "radius": radius, "context": answer_context(groups, web)}
+
+
 async def run(user_id: int, question: str, phone: tuple[float, float] | None,
               radius_override: float | None = None) -> None:
     a = _asks[user_id]
@@ -523,69 +593,13 @@ async def run(user_id: int, question: str, phone: tuple[float, float] | None,
         # The queue freed ComfyUI's VRAM before this job started (setting
         # comfyFreeFirst) - SLQ called free_vram here itself.
         step("Forstår spørgsmålet…", "understand")
-        keys = ", ".join(f"{k} ({c['label']})" for k, c in fm.CATEGORIES.items())
-        intent = clean_intent(await _ask_json(model, UNDERSTAND_PROMPT % keys, question))
-        a["intent"] = intent
-
-        where = None
-        if intent["location"]:
-            where = osm.find_locality(intent["location"]) or _place_as_locality(intent["location"])
-        if where is None and phone is not None:
-            where = {"name": "din position", "lat": phone[0], "lng": phone[1], "kind": "phone"}
-        if where is None:
-            a["text"] = ("Jeg kunne ikke finde " + (f"\"{intent['location']}\"" if intent["location"]
-                         else "et sted i spørgsmålet") +
-                         ". Skriv en by (fx Vojens), eller slå \"Nær mig\" til, så jeg kan bruge din position.")
+        found = await gather(user_id, question, phone, radius_override, a, model, step)
+        if found is None:
             a["state"] = "done"
             return
-        a["where"] = where["name"]
-        # The page's choice wins; then a distance said in the question; then
-        # the defaults. (2.47.0)
-        radius = radius_override or intent["radiusKm"] or (
-            NEAR_ME_RADIUS_KM if where["kind"] == "phone" else DEFAULT_RADIUS_KM)
-        a["radiusKm"] = radius
-
-        step(f"Søger omkring {where['name']}…", "search")
-        intent = drop_category_words(intent)
-        a["intent"] = intent
-        groups = await asyncio.to_thread(find, (where["lat"], where["lng"]), radius,
-                                         intent, user_id)
-        # Too few fit the words: the web first (2.49.6 - "græsk restaurant i
-        # Flensborg" was answered with the whole category and never asked
-        # the web). Near the phone, the web is asked about the nearest town.
-        web: list[dict] = []
-        if groups["fitting"] < MIN_MATCHES:
-            town = where if where["kind"] != "phone" else (
-                osm.nearest_locality(where["lat"], where["lng"]))
-            if town:
-                step("Finder for lidt - søger på nettet…", "web")
-                known = {p["id"] for g in ("good", "wished", "others") for p in groups[g]}
-                web = [p for p in await web_places(model, intent, town, question, user_id)
-                       if p["id"] not in known]
-                a["webAdded"] = len(web)
-        # Still too few, and there is a category: the rest of it, as its own
-        # group - "if nothing else".
-        rest: list[dict] = []
-        if groups["fitting"] + len(web) < MIN_MATCHES and intent["categories"] \
-                and intent["keywords"]:
-            have = {p["id"] for g in ("good", "wished", "others", "warnings") for p in groups[g]}
-            rest = await asyncio.to_thread(fill, (where["lat"], where["lng"]), radius,
-                                           intent, user_id, have | {p["id"] for p in web})
-        a["relaxed"] = bool(rest)
-        groups["rest"] = rest
-        # What was actually searched for, in words, shown under the answer.
-        what = [fm.CATEGORIES[c]["label"] for c in intent["categories"]] or ["alle slags steder"]
-        used = intent["keywords"]
-        a["searched"] = ", ".join(what) + (f" med \"{', '.join(used)}\"" if used else "") + \
-            (" (ordene også i andre kategorier)" if used and intent["categories"] else "") + \
-            (" - for få, så også resten af kategorien" if rest else "") + \
-            (f", {intent['age']} år" if intent["age"] is not None else "")
+        where, radius = found["where"], found["radius"]
 
         step("Skriver svaret…", "write")
-        context = answer_context(groups, web)
-        a["places"] = [card(p) for g in ("good", "wished", "others") for p in groups[g]] + \
-            [card(p) for p in web] + [card(p) for p in rest] + \
-            [card(p) for p in groups["warnings"]]
         a["text"] = ""
 
         def thinking(_text: str) -> None:
@@ -596,7 +610,8 @@ async def run(user_id: int, question: str, phone: tuple[float, float] | None,
         async for piece in ollama.stream_chat(model, [
                 {"role": "system", "content": ANSWER_PROMPT},
                 {"role": "user", "content":
-                    f"Spørgsmål: {question}\nOmråde: {where['name']}, radius {radius:g} km.\n\n{context}"}],
+                    f"Spørgsmål: {question}\nOmråde: {where['name']}, radius {radius:g} km.\n\n"
+                    f"{found['context']}"}],
                 on_thinking=thinking):
             if not a["text"]:
                 a["step"], a["phase"] = "Skriver svaret…", "write"

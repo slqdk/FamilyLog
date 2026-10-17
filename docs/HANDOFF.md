@@ -5,7 +5,59 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
-## 0.1.0 - Start here
+## 0.2.0 - Start here
+
+**What changed.** A mobile front page for the whole family at **/**, in
+Alf's Atlas's look: Alf to talk to, tiles for Alf's Atlas, the Dagbog and
+(admin/user only) Økonomi. A new **Dagbog** section. The admin app moved
+from `/` to **/app/** (hash navigation: `/app/#ledger`, `#familymap`,
+`#dagbog`, `#settings`). Family accounts now land on the front page.
+
+**Three Vite pages** (`frontend/vite.config.ts`):
+`/` = `index.html` → `src/home/` (HomeApp, Chat, Dagbog, logic, home.css on
+top of the Atlas's `fm.css`); `/app/` = `app/index.html` → `src/main.tsx` (the
+shell); `/fm/` = Alf's Atlas. First run (no accounts) sends `/` to `/app/`.
+
+**Alf (`backend/app/sections/chat/`)** - `/api/chat/{state,send,stop,new}`.
+One conversation per person in `chat_messages` (`archived` = after "Ny
+samtale"). A message is one queue job: a JSON **route** call (places or
+not, plus the message rewritten to stand alone using the last 8 turns);
+places → `familymap_ask.gather()` (Spørg Alf's search, split out of
+`run()` unchanged) and `ANSWER_PROMPT` with the last 4 turns; otherwise
+`GENERAL_PROMPT` with the history. Model: `settings.role_model("chat")`
+(FamilyMap's own chat override does not apply here). Answers keep `[[id]]`;
+the page links them to `/fm/#/sted/<id>`.
+
+**Dagbog (`backend/app/sections/dagbog/`)** - one row per person per day in
+`dagbog_entries`: mood, sleep, energy, mental, food (1-5), alcohol (units),
+tags (from the admin's list), highlight + one photo. **Privacy rule (Søren):
+the family sees everything except the highlight text and photo**, which only
+the author ever gets - enforced in `_entry_dto(own=...)` and in the photo
+endpoints, which only read the signed-in person's own rows (the admin
+included). Fields per person in `dagbog_members` (admin: Dagbog → Settings);
+a field that is off is not stored. Photos under `/data/dagbog/photos/<uid>/`,
+EXIF stripped (FamilyMap's `_process`). `Section.on_user_deleted` (new)
+removes them when an account is deleted.
+
+**Family access** is now `/api/fm/`, `/api/chat/`, `/api/dagbog/` (from the
+sections' `family_prefixes`); `/api/dagbog/admin/...` checks admin itself.
+
+**Found and fixed:** in this FastAPI (0.14x) included routers are not in
+`app.routes`, so 0.1.0's "every route refuses family" test only saw the
+shell's routes. It now reads all paths from the OpenAPI schema.
+
+**Verify**: pytest 239+, vitest 34, tsc, vite build, browser check 40 checks
+(first run → /app/, Settings, Økonomi, FamilyMap, the family's phone: Atlas,
+front page chat general + places, Dagbog with photo, family week as admin
+without the private text, the Økonomi tile).
+
+**Open / next**: the Dagbog has no history or trends view beyond the week;
+Alf's general answers have no web search; a desktop layout for the front
+page is the phone layout centred.
+
+---
+
+## 0.1.0
 
 **What it is.** A standalone, self-hosted household app (FastAPI + React +
 SQLite) split out of SLQ Companion 2.67.2. Two sections, Økonomi and
@@ -24,15 +76,19 @@ backend/app/
   core/            db, auth, settings, migrations, jobqueue (+broker), ollama, comfy,
                    telemetry (Steps), websearch, logs, help, sections (the Section type)
   sections/
-    __init__.py    SECTIONS = [ledger, familymap]   <- the backend registry
+    __init__.py    SECTIONS = [ledger, familymap, chat, dagbog]   <- the backend registry
+    chat/          Alf on the front page (0.2.0)
+    dagbog/        the Dagbog (0.2.0)
     ledger/        __init__ (SECTION + migrations), ledger.py, ledger_ask.py, ledger_routes.py
     familymap/     __init__ (SECTION + migrations), familymap*.py (six modules)
 backend/tests/     core/, sections/ledger/, sections/familymap/, sections/test_end_to_end.py
 frontend/
-  index.html, fm/index.html          two Vite pages (app, family page)
-  src/App.tsx                        the shell (nav from the registry, settings, help, account)
+  index.html, app/index.html, fm/index.html   three Vite pages: / front page, /app/ admin, /fm/ Atlas
+  src/home/                          the front page: HomeApp, Chat, Dagbog (0.2.0)
+  src/App.tsx                        the admin shell at /app/ (nav from the registry, settings, help, account)
   src/core/                          api, types, LoginScreen, SettingsPage, HelpPanel, StepTree, Markdown
-  src/sections/registry.ts           SECTIONS = [ledgerSection, familyMapSection]
+  src/sections/registry.ts           SECTIONS = [ledgerSection, familyMapSection, dagbogSection]
+  src/sections/dagbog/               the Dagbog's settings in the admin app (0.2.0)
   src/sections/ledger/               index.ts, LedgerView(+test), api.ts, ledger.css
   src/sections/familymap/            index.ts, FamilyMapAdmin, api.ts, familymap.css, phone/ (the /fm/ page)
 tools/  container.py (update.sh), mock_ollama.py, browser_check/{run.py,check_all.py}

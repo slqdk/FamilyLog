@@ -47,7 +47,7 @@ def wait_for(url: str, timeout: float = 20) -> None:
 def main() -> int:
     script = Path(sys.argv[1] if len(sys.argv) > 1 else REPO / "tools" / "browser_check" / "check_all.py").resolve()
     dist = REPO / "frontend" / "dist"
-    if not (dist / "index.html").is_file() or not (dist / "fm" / "index.html").is_file():
+    if not all((dist / page).is_file() for page in ("index.html", "app/index.html", "fm/index.html")):
         raise SystemExit("frontend/dist is missing or incomplete - run `npm run build` in frontend/ first")
     scratch = Path(os.environ.get("SCRATCH") or tempfile.mkdtemp(prefix="familylog-bc-"))
     shutil.rmtree(scratch, ignore_errors=True)

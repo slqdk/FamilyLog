@@ -38,6 +38,7 @@ First start (builds the image; the first build takes a few minutes):
     bash update.sh compose up -d --build
 
 Then open the address and create the administrator (the first account).
+The front page is `/` (the family's phone page); the admin app is `/app/`.
 `bash update.sh compose …` is `docker compose` with the right files - use it
 for anything compose: `bash update.sh compose logs -f`, `… ps`, `… restart`.
 

@@ -49,16 +49,23 @@ def test_family_reaches_only_the_family_api(client):
 
 
 def test_every_api_route_outside_fm_refuses_family(client):
-    """Not a sample: every registered /api route, by the middleware rule."""
+    """Not a sample: every registered /api route, by the middleware rule.
+
+    FamilyLog 0.2.0: the family's API is the family page's (/api/fm/), the
+    front page's chat (/api/chat/) and the Dagbog (/api/dagbog/). Routes are
+    read from the OpenAPI schema: FastAPI 0.14x keeps included routers out
+    of app.routes, so the old loop never saw a section's routes at all."""
     from app.core import auth
     from app.main import app
+    family_api = ("/api/fm/", "/api/chat/", "/api/dagbog/")
+    assert auth.family_prefixes() == family_api
+    paths = set(app.openapi()["paths"]) | {getattr(r, "path", "") for r in app.routes}
+    api = sorted(p for p in paths if p.startswith("/api/"))
+    assert len(api) > 60 and "/api/ledger/summary" in api and "/api/chat/send" in api
     fam_user = {"id": 99, "role": "family"}
-    for route in app.routes:
-        path = getattr(route, "path", "")
-        if not path.startswith("/api/"):
-            continue
+    for path in api:
         allowed = auth.family_allows(fam_user, path)
-        assert allowed == path.startswith("/api/fm/"), path
+        assert allowed == path.startswith(family_api), path
 
 
 def test_family_accounts_do_not_count_towards_the_user_limit(client):

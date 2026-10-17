@@ -1,4 +1,4 @@
-"""Browser check for FamilyLog v0.1 - run with tools/browser_check/run.py.
+"""Browser check for FamilyLog - run with tools/browser_check/run.py.
 
 Through the real UI, against the real backend and the mock Ollama:
 first-run setup, Settings (Ollama Test lists the models, roles saved and
@@ -6,7 +6,10 @@ kept after a reload), Økonomi (import, categorise by role, Overview,
 Transactions, an Ask with Steps and "Counted by the app"), FamilyMap admin
 (tabs, a family account, the role shown as default), the family page at
 /fm/ (login, list, Spørg Alf with the phone's position), the family lockout,
-Alt+click help, and the phone width. Every expectation is checked; a page
+Alt+click help, the phone width, and (0.2.0) the front page: Alf answering
+a general question and a question about places, the shortcuts per role,
+the Dagbog filled in on a phone and the family week without the private
+text. Every expectation is checked; a page
 error or console error fails the run. No real data: the export is synthetic.
 """
 from __future__ import annotations
@@ -76,6 +79,7 @@ with sync_playwright() as p:
 
     # ---- first run: the setup screen makes the admin ----------------------------
     page.goto(BASE + "/")
+    page.wait_for_url("**/app/", timeout=10000)          # the front page sends the first run here
     expect(page.get_by_role("heading", name="FamilyLog")).to_be_visible()
     check("first run shows setup", page.get_by_role("button", name="Create administrator").is_visible())
     page.fill("input[name=username]", "admin")
@@ -84,8 +88,8 @@ with sync_playwright() as p:
     page.get_by_role("button", name="Create administrator").click()
     page.wait_for_selector(".topbar")
     check("signed in, app name in the top bar", page.locator(".brand").inner_text() == "FamilyLog")
-    check("both sections in the navigation",
-          page.locator(".nav-btn").all_inner_texts() == ["Økonomi", "FamilyMap"])
+    check("the sections in the navigation",
+          page.locator(".nav-btn").all_inner_texts() == ["Økonomi", "FamilyMap", "Dagbog"])
 
     # ---- Settings: Test lists the models, roles are saved ------------------------
     page.get_by_role("button", name="Settings").click()
@@ -102,7 +106,9 @@ with sync_playwright() as p:
     page.wait_for_selector(".settings-head .fma-ok")
     page.screenshot(path=f"{OUT}/01-settings.png", full_page=True)
     page.reload()
-    page.get_by_role("button", name="Settings").click()
+    page.wait_for_selector(".topbar")
+    check("a reload stays on Settings (#settings)", page.url.endswith("/app/#settings")
+          and page.locator(".settings-page").count() == 1, page.url)
     expect(page.locator("[data-help='settings.ollama'] input").first).to_have_value(MOCK)
     check("roles kept after a reload",
           page.locator("[data-help='settings.models'] select").nth(0).input_value() == "qwen3.6:27b"
@@ -212,16 +218,86 @@ with sync_playwright() as p:
     # The lockout: the family account reaches nothing but /api/fm/.
     check("family refused outside /api/fm/", fp.request.get(BASE + "/api/ledger/summary").status == 403
           and fp.request.get(BASE + "/api/settings").status == 403)
-    fp.goto(BASE + "/")
-    fp.wait_for_url("**/fm/", timeout=10000)
-    check("the app sends a family account to /fm/", fp.url.endswith("/fm/"))
+    fp.goto(BASE + "/app/")
+    fp.wait_for_url(BASE + "/", timeout=10000)
+    check("the admin app sends a family account to the front page", fp.url == BASE + "/")
+
+    # ---- the front page on the family's phone (0.2.0) ---------------------------------------
+    fp.wait_for_selector(".hm-tiles")
+    tiles = fp.locator(".hm-tile-name").all_inner_texts()
+    check("family tiles: Atlas and Dagbog, no Økonomi", tiles == ["Alf’s Atlas", "Dagbog"], str(tiles))
+    fp.locator(".hm-composer textarea").fill("Hvad er en god aftensmad?")
+    fp.get_by_role("button", name="Send").click()
+    wait_until(fp, lambda: fp.locator(".hm-alf").count() > 0 and "Hej! Det er Alf" in fp.locator(".hm-alf").last.inner_text())
+    check("Alf answers a general question", "Hej! Det er Alf" in fp.locator(".hm-alf").last.inner_text())
+    pos = fp.locator(".hm-pos input")
+    if not pos.is_checked():
+        pos.check()
+    fp.locator(".hm-composer textarea").fill("Find en legeplads her")
+    fp.get_by_role("button", name="Send").click()
+    wait_until(fp, lambda: fp.locator(".hm-alf .fm-answer-link").count() > 0)
+    link = fp.locator(".hm-alf .fm-answer-link").first
+    check("a question about places links the place in the Atlas",
+          link.count() == 1 and link.get_attribute("href") == f"/fm/#/sted/{pid}")
+    fp.screenshot(path=f"{OUT}/08-home-chat.png", full_page=True)
+    sw = fp.evaluate("document.documentElement.scrollWidth")
+    check("front page fits the phone", sw <= 390, f"scrollWidth {sw}")
+
+    # Dagbog: fill in today.
+    fp.locator(".hm-tile", has_text="Dagbog").click()
+    fp.wait_for_selector(".hm-field")
+    fp.get_by_label("Humør 4").click()
+    fp.get_by_label("Søvn 3").click()
+    fp.get_by_label("Flere").click()
+    fp.locator(".hm-tags button", has_text="Sport").click()
+    fp.locator(".hm-text").fill("Hemmelig dagbogstekst")
+    from PIL import Image
+    import io
+    buf = io.BytesIO()
+    Image.new("RGB", (640, 480), (90, 140, 200)).save(buf, "JPEG")
+    fp.locator(".hm-photo-pick input[type=file]").set_input_files(
+        files=[{"name": "dag.jpg", "mimeType": "image/jpeg", "buffer": buf.getvalue()}])
+    fp.wait_for_selector(".hm-photo img", timeout=15000)
+    if fp.locator(".hm-save").is_enabled():
+        fp.locator(".hm-save").click()
+    wait_until(fp, lambda: "Gemt" in fp.locator(".hm-save").inner_text())
+    check("the day is saved", "Gemt" in fp.locator(".hm-save").inner_text(), fp.locator(".hm-save").inner_text())
+    fp.screenshot(path=f"{OUT}/09-dagbog.png", full_page=True)
+    sw = fp.evaluate("document.documentElement.scrollWidth")
+    check("Dagbog fits the phone", sw <= 390, f"scrollWidth {sw}")
+    fp.locator(".hm-tabs a", has_text="Familien").click()
+    fp.wait_for_selector(".hm-week")
+    fp.screenshot(path=f"{OUT}/10-dagbog-family.png", full_page=True)
+    fp.goto(BASE + "/fm/")
+    fp.locator(".fm-burger").click()
+    check("the Atlas menu leads back to the front page",
+          fp.locator(".fm-drawer a", has_text="Til forsiden").get_attribute("href") == "/")
 
     # ---- the app at phone width ----------------------------------------------------------
     ph = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True).new_page()
     watch(ph, "phone app")
     ph.request.post(BASE + "/api/auth/login", data={"username": "admin", "password": "test-password-1"})
     ph.goto(BASE + "/")
+    ph.wait_for_selector(".hm-tiles")
+    tiles = ph.locator(".hm-tile-name").all_inner_texts()
+    check("the admin's tiles include Økonomi", "Økonomi" in tiles, str(tiles))
+    # The admin sees mor's day in the family week - and never her text.
+    ph.goto(BASE + "/#/dagbog/familien")
+    ph.wait_for_selector(".hm-week")
+    row = ph.locator(".hm-week tbody tr", has_text="mor")
+    check("the family week shows mor's mood", "🙂" in row.inner_text(), row.inner_text())
+    row.locator(".hm-cell:not(.hm-empty)").first.click()
+    detail = ph.locator(".hm-detail").inner_text()
+    check("the day's detail has ratings and tags, not the text",
+          "Sport" in detail and "Hemmelig" not in detail and "kun for mor" in detail, detail[:160])
+    check("mor's text is nowhere on the admin's page", "Hemmelig" not in ph.content())
+    ph.screenshot(path=f"{OUT}/11-admin-family-week.png", full_page=True)
+    ph.locator(".fm-back").click()
+    ph.wait_for_selector(".hm-tiles")
+    ph.locator(".hm-tile", has_text="Økonomi").click()
+    ph.wait_for_url("**/app/#ledger")
     ph.wait_for_selector(".led-tile, .led-empty, .led-ask-box", timeout=15000)
+    check("the Økonomi tile opens Økonomi in the admin app", ph.locator(".nav-btn.active").inner_text() == "Økonomi")
     for label, open_ in (("Økonomi", lambda: ph.locator(".subnav-btn", has_text="Overview").click()),
                          ("Settings", lambda: ph.get_by_role("button", name="Settings").click())):
         open_()

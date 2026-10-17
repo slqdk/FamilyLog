@@ -118,6 +118,19 @@ def _answer_for(model: str, messages: list[dict], fmt) -> tuple[str, str]:
                                     "nonsense-key" if "bogus" in text else "other")
         return think, json.dumps(out)
 
+    # ---- Alf on the front page (FamilyLog 0.2.0) ----
+    if system.startswith("Afgør hvad familiemedlemmets"):
+        msg = last.split("Sidste besked:", 1)[-1].strip()
+        low = msg.lower()
+        places = any(w in low for w in ("legeplads", "restaurant", "pizza", "spise ude",
+                                        "udflugt", "museum", "strand", "svømmehal"))
+        if "og i " in low and "Samtalen indtil nu" in last:      # a follow-up
+            places = True
+        return think, json.dumps({"places": places, "question": msg})
+    if system.startswith("Du er Alf, en venlig hjælper"):
+        n = sum(1 for m in messages if m.get("role") == "user")
+        return think, f"Hej! Det er Alf. Du skrev: \"{last[:80]}\" ({n} beskeder i samtalen)."
+
     # ---- FamilyMap ----
     if system.startswith("Du hjælper en familie"):
         return think, json.dumps(_fm_intent(last))

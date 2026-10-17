@@ -92,9 +92,9 @@ describe('Shell', () => {
   });
 
   it('lists the sections from the registry; FamilyMap only for the admin', () => {
-    expect(SECTIONS.map((s) => s.id)).toEqual(['ledger', 'familymap']);
+    expect(SECTIONS.map((s) => s.id)).toEqual(['ledger', 'familymap', 'dagbog']);
     expect(sectionsFor('user').map((s) => s.id)).toEqual(['ledger']);
-    expect(sectionsFor('admin').map((s) => s.id)).toEqual(['ledger', 'familymap']);
+    expect(sectionsFor('admin').map((s) => s.id)).toEqual(['ledger', 'familymap', 'dagbog']);
   });
 });
 

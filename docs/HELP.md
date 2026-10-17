@@ -15,7 +15,7 @@ title: Help
 where: Top bar
 since: 0.1.0
 
-This drawer. **Alt + click** any control - a button, a field, a card, a
+This drawer, in the admin app at **/app/**. **Alt + click** any control - a button, a field, a card, a
 section header - and its entry opens here. The **?** in the top bar opens
 the index; the search box filters by title, location and text. **Esc**
 closes it. The version in the header is the release this help describes.
@@ -29,15 +29,16 @@ The app's sections. Each has its own pages, shown as tabs under the top
 bar; the app remembers the section and page you were on in this browser.
 FamilyMap is shown to the administrator only.
 
-## app.familyPage
-title: Family page
+## app.home
+title: Front page
 where: Top bar
-since: 0.1.0
+since: 0.2.0
 
-Opens **/fm/**, the Danish phone page the family uses for FamilyMap
-(reviews, the map, Spørg Alf). Family accounts sign in there and can reach
-nothing else; your own login works there too. On a phone, "Add to home
-screen" makes it an app icon.
+Opens the front page at **/** - what everyone in the family sees on the
+phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog and (for the
+administrator and user accounts) Økonomi. Family accounts land there when
+they sign in and can reach nothing in this admin app. On a phone, "Add to
+home screen" makes it an app icon.
 
 ## app.settings
 title: Settings
@@ -467,3 +468,35 @@ than three places fit, it searches the web (the app's search setting) and
 saves the places it finds (source *web*, position approximate). Without a
 chat model (here or in Settings) the family is told to ask you to choose one. **Overpass address** is where the OSM import asks; empty uses the address in
 Settings → Maps.
+
+## nav.dagbog
+title: Dagbog
+where: Top bar (administrator)
+since: 0.2.0
+
+The Dagbog's settings. Everyone rates their own day on the front page
+(**Dagbog**): mood, sleep, energy, mental readiness, food, alcohol,
+activities and the day's highlight (a text and a photo). The family sees
+each other's ratings and activities as a week (**Familien**); the highlight
+text and photo are only ever shown to the person who wrote them - not to the
+administrator either, here or anywhere else.
+
+## dagbog.members
+title: Fields per person
+where: Dagbog → Settings
+since: 0.2.0
+
+Which fields each person fills in - for example no alcohol field for a
+child. A field that is off is neither asked on the phone nor stored, even
+if a request sends it. Every person keeps at least one field. Accounts are
+made in Settings → Accounts (family accounts too).
+
+## dagbog.tags
+title: Activities
+where: Dagbog → Settings
+since: 0.2.0
+
+The list of activities everyone picks from in their Dagbog (school or work,
+sport, friends, ...), one per line. Duplicates and empty lines are dropped;
+at most 40, each up to 30 characters. Removing one keeps it on the days
+that already have it.

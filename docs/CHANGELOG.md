@@ -2,6 +2,37 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.2.0 - 2026-10-17
+
+A front page for the family, Alf to talk to, and the Dagbog.
+
+**ACTION REQUIRED**
+
+1. `cd /opt/familylog && bash update.sh` (backup, build, check, rollback on failure).
+2. The admin app is now at **https://familylog.slq.dk/app/**; the address
+   without a path is the new front page. Update bookmarks.
+3. Optional: Dagbog → Settings in the admin app - the activity list, and
+   which fields each person records (e.g. no alcohol for a child).
+
+**Front page (/)** - for everyone, phone first, in Alf's Atlas's look:
+- **Alf**: ask anything. Questions about places (playgrounds, food out,
+  trips...) use Spørg Alf's search over the family's own reviews and link the
+  places into the Atlas; everything else gets a general answer. One
+  conversation per person, kept until "Ny samtale".
+- Tiles: **Alf's Atlas**, **Dagbog** ("Hvordan var i dag?" until today is
+  filled in), and **Økonomi** for the administrator and user accounts only.
+- Family accounts land here when they sign in; the admin app sends them here.
+
+**Dagbog** - rate the day: mood (smileys), sleep, energy, mental readiness,
+food (1-5), alcohol (units), activities, and the day's highlight (text and a
+photo). **Familien** shows everyone's week. The family sees ratings and
+activities; the highlight text and photo are only ever shown to their author.
+The administrator sets the activities and each person's fields.
+
+**Admin app** moved to **/app/**; `/app/#ledger`, `#familymap`, `#dagbog` and
+`#settings` open those pages directly and survive a reload. The Atlas's menu
+has "Til forsiden".
+
 ## 0.1.0 - 2026-10-17
 
 The first release: a standalone household app, split out of SLQ Companion

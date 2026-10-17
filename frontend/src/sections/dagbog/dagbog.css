@@ -1,0 +1,8 @@
+/* Dagbog settings (FamilyLog 0.2.0) */
+.dg-admin { max-width: 980px; }
+.dg-table-wrap { overflow-x: auto; }
+.dg-table { border-collapse: collapse; font-size: 13px; width: 100%; }
+.dg-table th, .dg-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: center; white-space: nowrap; }
+.dg-table thead th { color: var(--text-dim); font-weight: 500; }
+.dg-table tbody th { text-align: left; font-weight: 600; }
+.dg-actions { margin-top: 8px; }

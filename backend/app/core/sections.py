@@ -13,6 +13,9 @@ A section brings, in one place:
 * family_prefixes - API prefixes a `family` account may call (only the
                  family page's API; everything else refuses family)
 * reset        - optional: clears in-memory state (tests, "clear data")
+* on_user_deleted - optional: called with the user id after an account is
+                 deleted (rows go by ON DELETE CASCADE; files are the
+                 section's to remove)
 
 Adding a section: a package under app/sections/, one line in
 app/sections/__init__.py, a folder under frontend/src/sections/ plus one line
@@ -35,3 +38,4 @@ class Section:
     public_paths: tuple[str, ...] = ()
     family_prefixes: tuple[str, ...] = ()
     reset: Callable[[], None] | None = None
+    on_user_deleted: Callable[[int], None] | None = None

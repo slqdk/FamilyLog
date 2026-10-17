@@ -199,6 +199,12 @@ def remove_user(uid: int, request: Request):
     if uid == me["id"]:
         raise HTTPException(400, "You cannot delete your own account.")
     auth.delete_user(uid)
+    for s in SECTIONS:
+        if s.on_user_deleted:
+            try:
+                s.on_user_deleted(uid)
+            except Exception as exc:             # the account is gone either way
+                logs.record_exception(exc, f"{s.id}: cleaning up after a deleted account")
     return {"ok": True}
 
 

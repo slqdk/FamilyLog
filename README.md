@@ -1,8 +1,10 @@
 # FamilyLog
 
-A self-hosted household app: **Økonomi** (bank exports in, exact numbers
-out, questions answered by a local model from SQL results) and **FamilyMap**
-(the family's own reviews of places, with a Danish phone page at `/fm/`).
+A self-hosted household app. A phone front page at `/` with **Alf** (a local
+model the family can ask anything, that knows the family's places) and the
+**Dagbog** (rate the day); **FamilyMap** (the family's own reviews of places,
+Alf's Atlas at `/fm/`); and **Økonomi** (bank exports in, exact numbers out).
+The admin app is at `/app/`.
 FastAPI + SQLite backend, React + Vite frontend, one container, models from
 Ollama on the GPU VM.
 
