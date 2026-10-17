@@ -57,6 +57,14 @@ def _m004_ask(con: sqlite3.Connection) -> None:
     """)
 
 
+def _m005_import_map(con: sqlite3.Connection) -> None:
+    """0.3.2: what came over from SLQ's Alf's Atlas (atlas_import.py), so a
+    second run neither doubles nor loses anything."""
+    con.execute("CREATE TABLE IF NOT EXISTS fm_import_map ("
+                " kind TEXT NOT NULL, src_id INTEGER NOT NULL, dst_id INTEGER NOT NULL,"
+                " src_user TEXT, PRIMARY KEY (kind, src_id))")
+
+
 def _reset() -> None:
     familymap_ask._asks.clear()
 
@@ -70,6 +78,7 @@ SECTION = Section(
         (2, "osm import, settings, photo descriptions (SLQ _m041)", _m002_osm),
         (3, "wishlist (SLQ _m042)", _m003_wishlist),
         (4, "localities and position indexes (SLQ _m043)", _m004_ask),
+        (5, "import map for SLQ's Alf's Atlas", _m005_import_map),
     ],
     public_paths=("/api/fm/brand",),
     family_prefixes=("/api/fm/",),

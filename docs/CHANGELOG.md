@@ -2,6 +2,25 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.2 - 2026-10-17
+
+Alf's Atlas comes over from SLQ Companion after all.
+
+**ACTION REQUIRED**:
+1. `cd /opt/familylog && bash update.sh`.
+2. Make the family's accounts in FamilyLog with the same usernames as in SLQ.
+3. Follow docs/CONTAINER.md section 6: copy SLQ's database and photos to
+   the FamilyLog LXC, run `python -m app.import_atlas` as a dry run, then
+   with `--apply`.
+
+- **`python -m app.import_atlas`** brings over everything in the old Atlas:
+  places with every edit, the family's reviews and photos, wishlists and
+  Spørg Alf's town names. People are matched by username; reviews by
+  someone without an account yet come in as "(slettet bruger)" and are
+  given back on a later run. A dry run is the default; `--apply` backs up
+  FamilyLog's database first. Re-running never doubles anything; an OSM
+  place FamilyLog already has is merged.
+
 ## 0.3.1 - 2026-10-17
 
 Cyklus, after the first look next to Flo.

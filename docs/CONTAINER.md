@@ -142,3 +142,51 @@ GPU), each job first asks ComfyUI to drop its models. SLQ has its own queue,
 so an SLQ answer and a FamilyLog job can still meet on the card; the queue
 module (`backend/app/core/jobqueue.py`) has a broker seam for SLQ's GPU-job
 API when it exists.
+
+## 6. Bringing Alf's Atlas over from SLQ Companion (0.3.2)
+
+Everything in the old Atlas comes over: places (yours, OSM's and every
+edit), the family's reviews and photos, wishlists, and the town names Spørg
+Alf uses. People are matched by **username**, so make the family's accounts
+in FamilyLog first with the same usernames as in SLQ. Anyone without an
+account yet is listed; their reviews come in as "(slettet bruger)" and are
+given back to them when you run the import again after making the account.
+Running it again is always safe - nothing is doubled.
+
+**1. On the SLQ host** - a consistent copy of SLQ's database, and its photos:
+
+    docker exec slq-companion python3 -c "import sqlite3; s=sqlite3.connect('/data/app.db'); d=sqlite3.connect('/tmp/atlas.db'); s.backup(d); d.execute('PRAGMA journal_mode=DELETE'); d.close()"
+    mkdir -p ~/atlas
+    docker cp slq-companion:/tmp/atlas.db ~/atlas/atlas.db
+    docker cp slq-companion:/data/familymap/photos ~/atlas/photos
+    docker exec slq-companion rm /tmp/atlas.db
+    scp -r ~/atlas root@30.11.0.108:/root/
+
+(If SLQ runs in the same LXC as FamilyLog, skip the `scp`.)
+
+**2. On the FamilyLog LXC (30.11.0.108)** - into the container, then a dry
+run that shows exactly what will happen and changes nothing:
+
+    docker cp /root/atlas familylog:/tmp/atlas
+    docker exec familylog python -m app.import_atlas /tmp/atlas/atlas.db --photos /tmp/atlas/photos
+
+It prints the places (new / merged with FamilyLog's own OSM places /
+updated), reviews, photos (and any missing from the folder), wishlists,
+towns, who was matched and who has no account yet.
+
+**3. Import:**
+
+    docker exec familylog python -m app.import_atlas /tmp/atlas/atlas.db --photos /tmp/atlas/photos --apply
+
+It first saves FamilyLog's database to `/data/backups/app-<time>-before-atlas-import.db`
+inside the container. To undo: `bash update.sh rollback` (the update
+backups), or copy that file back over `/data/app.db` with the container
+stopped.
+
+**4. Clean up** when you are happy: `docker exec -u 0 familylog rm -rf /tmp/atlas`
+and `rm -rf /root/atlas` (and `~/atlas` on the SLQ host). The copies hold the
+family's reviews and photos.
+
+A place that changes in SLQ after the import is updated by a later run,
+unless it was changed in FamilyLog after that. SLQ's Atlas settings (name,
+models) are not copied - FamilyLog has its own under FamilyMap → Settings.

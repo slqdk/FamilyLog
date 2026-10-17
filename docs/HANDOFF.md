@@ -5,6 +5,26 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.2 - Start here
+
+Søren reversed "no migration": `app/sections/familymap/atlas_import.py`
+(entry `python -m app.import_atlas`, wrapper `app/import_atlas.py`) imports
+SLQ's Atlas from a copy of SLQ's app.db (read through a private temp copy,
+so WAL files in a read-only folder are fine) plus its familymap/photos
+folder. FamilyMap migration 5 adds `fm_import_map(kind, src_id, dst_id,
+src_user)` - places/reviews/photos already imported are recognised on a
+re-run. Places: mapped → update when SLQ is newer (or SLQ locked and ours
+not); unmapped OSM/Google with the same (source, source_id) → merged; else
+new. Reviews: inserted once; user by username, NULL ("slettet bruger") when
+no account, filled in on a later run. Photos: files copied under their own
+names (renamed on a clash, never overwritten); missing files are counted
+and left out. Wishlists INSERT OR IGNORE (waiting when no account);
+fm_localities INSERT OR IGNORE by osm_id; fm_settings not copied. Dry run =
+the same transaction rolled back. Tests: tests/sections/familymap/test_atlas_import.py
+(synthetic data only). Docs: CONTAINER.md section 6.
+
+---
+
 ## 0.3.1 - Start here
 
 `predict.day_map` replaces the bare kinds: per day `kind` (now also
