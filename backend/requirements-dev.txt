@@ -1,0 +1,5 @@
+-r requirements.txt
+pytest>=8.0
+# The browser check (tools/browser_check): needs a Chromium too.
+playwright>=1.40
+pyyaml>=6.0

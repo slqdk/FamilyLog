@@ -1,0 +1,23 @@
+# Windows batch and PowerShell files must keep CRLF endings or cmd.exe can
+# mis-parse them after a clone on a machine with core.autocrlf=input.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# Source stays LF so diffs are clean.
+*.py   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js    text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.md   text eol=lf
+*.sh   text eol=lf
+*.yml  text eol=lf
+Dockerfile text eol=lf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.db  binary

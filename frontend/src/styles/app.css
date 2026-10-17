@@ -1,0 +1,200 @@
+/* FamilyLog - the shell. Tokens and base controls from SLQ's app.css, so the
+   ported Økonomi and FamilyMap pages look as they did there. */
+
+:root {
+  --bg: #f7f4ee;
+  --bg-panel: #ffffff;
+  --bg-raised: #efe9df;
+  --line: #ddd6ca;
+  --text: #2a2622;
+  --text-dim: #6b645b;
+  --accent: #c2703a;       /* warm amber */
+  --accent-soft: #f0e2d4;
+  --accent-text: #1a120a;
+  --ollama: #4f8a6b;       /* green: done, connected */
+  --danger: #c8554f;
+  --radius: 10px;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --display: 'Fraunces', Georgia, serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1916;
+    --bg-panel: #23201c;
+    --bg-raised: #2c2823;
+    --line: #3b362f;
+    --text: #ece6dc;
+    --text-dim: #a59c8f;
+    --accent: #d9874f;
+    --accent-soft: #3a2a1d;
+    --ollama: #6fb38e;
+    --danger: #e0706a;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: var(--sans); font-size: 14px; -webkit-font-smoothing: antialiased;
+}
+code, pre { font-family: var(--mono); font-size: 12px; }
+
+/* ---- inputs and buttons (SLQ) ---- */
+input, select, textarea {
+  background: var(--bg); border: 1px solid var(--line); color: var(--text);
+  font-family: var(--sans); font-size: 13px; padding: 7px 10px; border-radius: 8px; width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+input:disabled, select:disabled { opacity: .6; }
+input[type="checkbox"], input.checkbox { width: auto; accent-color: var(--accent); }
+textarea { resize: vertical; }
+.primary-btn {
+  background: var(--accent); color: var(--accent-text); border: none;
+  font-family: var(--sans); font-weight: 600; font-size: 13px;
+  padding: 7px 14px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+}
+.primary-btn:disabled { opacity: 0.5; cursor: default; }
+.ghost-btn {
+  background: none; border: 1px solid var(--line); color: var(--text-dim);
+  font-family: var(--sans); font-size: 13px; padding: 7px 14px; border-radius: 8px;
+  cursor: pointer; text-decoration: none; white-space: nowrap; display: inline-flex;
+  align-items: center; gap: 4px;
+}
+.ghost-btn:hover { color: var(--text); border-color: var(--text-dim); }
+.ghost-btn:disabled { opacity: .45; cursor: default; }
+.ghost-btn.sm { padding: 3px 9px; font-size: 12px; }
+.ghost-btn.on { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+.ghost-btn.icon { font-weight: 700; min-width: 28px; justify-content: center; }
+.ghost-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.primary-btn.sm { padding: 3px 10px; font-size: 12px; }
+.danger-btn {
+  background: none; border: 1px solid var(--danger); color: var(--danger);
+  font-family: var(--sans); font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
+}
+.danger-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); }
+.field small { opacity: .8; }
+.empty { margin: auto; color: var(--text-dim); padding: 24px; text-align: center; }
+.dim { color: var(--text-dim); }
+.appbar-spacer { flex: 1 1 auto; }
+.fp-empty { color: var(--text-dim); font-size: 12px; line-height: 1.5; }
+.files-panel { flex-shrink: 0; border-left: 1px solid var(--line); background: var(--bg-panel);
+               display: flex; flex-direction: column; overflow-y: auto; }
+.rag-steps { margin-top: 2px; }
+@keyframes rag-pulse { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+
+/* ---- the shell ---- */
+.shell { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+.topbar {
+  display: flex; align-items: center; gap: 8px; padding: 6px 14px;
+  background: var(--bg-panel); border-bottom: 1px solid var(--line); flex: none;
+}
+.brand { font-family: var(--display); font-size: 21px; margin-right: 12px; white-space: nowrap; }
+.nav { display: flex; gap: 2px; }
+.nav-btn, .subnav-btn {
+  background: none; border: none; color: var(--text-dim); font: inherit; cursor: pointer;
+  padding: 6px 12px; border-radius: 8px; white-space: nowrap;
+}
+.nav-btn:hover, .subnav-btn:hover { color: var(--text); background: var(--bg-raised); }
+.nav-btn.active { color: var(--text); background: var(--accent-soft); font-weight: 600; }
+.subnav {
+  display: flex; gap: 2px; padding: 4px 14px; border-bottom: 1px solid var(--line);
+  background: var(--bg); overflow-x: auto; flex: none;
+}
+.subnav-btn { font-size: 13px; padding: 4px 10px; }
+.subnav-btn.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
+.main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.account { position: relative; }
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 240px;
+  background: var(--bg-panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.account-who { font-size: 12px; color: var(--text-dim); }
+.account-pw { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---- login (SLQ) ---- */
+.login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+              background: var(--bg); padding: 24px; }
+.login-card { width: 100%; max-width: 380px; background: var(--bg-panel); padding: 28px;
+              border: 1px solid var(--line); border-radius: 12px;
+              display: flex; flex-direction: column; gap: 12px; }
+.login-title { font-family: var(--display); font-size: 30px; line-height: 1.15; margin: 0 0 4px; font-weight: 500; }
+.login-lead { font-size: 13px; color: var(--text-dim); margin: 0 0 6px; line-height: 1.45; }
+.login-warn { font-size: 12px; padding: 8px 10px; border-radius: 6px; margin: 0;
+              background: rgba(200,120,30,.12); border: 1px solid rgba(200,120,30,.4); }
+.login-error { font-size: 12px; color: var(--danger); margin: 0; }
+.login-btn { margin-top: 4px; }
+.crash { white-space: pre-wrap; font-size: 12px; color: var(--danger); }
+
+/* ---- accounts list (SLQ) ---- */
+.user-list { list-style: none; margin: 4px 0 12px; padding: 0; }
+.user-list li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line);
+                flex-wrap: wrap; }
+.user-name { font-weight: 600; font-size: 13px; }
+.user-role { font-size: 12px; color: var(--text-dim); flex: 1 1 auto; }
+.user-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(127,127,127,.4); }
+.user-dot.on { background: var(--ollama); }
+
+/* ---- settings ---- */
+.settings-page { flex: 1; overflow-y: auto; }
+.settings-inner { max-width: 860px; margin: 0 auto; padding: 0 16px 48px; }
+.settings-head {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+  padding: 14px 0 10px; background: var(--bg); border-bottom: 1px solid var(--line); flex-wrap: wrap;
+}
+.settings-head h1 { font-family: var(--display); font-weight: 500; font-size: 24px; margin: 0; }
+.settings-head .fma-ok, .settings-head .fma-error { margin: 0; }
+.settings-group { background: var(--bg-panel); border: 1px solid var(--line); border-radius: var(--radius);
+                  padding: 4px 16px 12px; margin-top: 16px; }
+.settings-group-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.settings-group h2 { font-size: 15px; font-weight: 600; margin: 12px 0 6px; }
+.settings-row { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 12px; align-items: start;
+                padding: 7px 0; }
+.settings-label { font-size: 13px; padding-top: 7px; }
+.settings-control { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.settings-control > input:not([type=checkbox]), .settings-control > select, .settings-control > .settings-inline,
+.settings-control > table { width: 100%; }
+.settings-control.settings-inline { flex-direction: row; align-items: center; }
+.settings-control > input[type=checkbox] { margin: 9px 0 0; }
+.settings-control small { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+.settings-control .settings-lock { color: #b07a18; }
+.settings-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.settings-inline .fma-ok, .settings-inline .fma-error { margin: 0; }
+.settings-inline input { flex: 1; min-width: 140px; }
+.settings-add select { width: auto; }
+.settings-static { padding-top: 7px; font-size: 13px; }
+.settings-note { font-size: 12.5px; color: var(--text-dim); margin: 4px 0 8px; line-height: 1.45; }
+.settings-more { margin-top: 4px; }
+.settings-more summary { cursor: pointer; color: var(--text-dim); font-size: 12.5px; padding: 6px 0; }
+.settings-models { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+.settings-models th, .settings-models td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.settings-models th { color: var(--text-dim); font-weight: 500; }
+.diag-list { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.diag-list li { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.diag-list summary { cursor: pointer; }
+.diag-list pre { white-space: pre-wrap; max-height: 260px; overflow: auto; }
+.diag-time { color: var(--text-dim); font-family: var(--mono); }
+
+/* ---- markdown ---- */
+.md { line-height: 1.55; }
+.md p { margin: 0 0 8px; }
+.md table { border-collapse: collapse; margin: 6px 0; }
+.md th, .md td { border: 1px solid var(--line); padding: 3px 8px; }
+.md-streaming > :last-child::after { content: '▍'; animation: rag-pulse 1s infinite; margin-left: 2px; }
+
+/* ---- phone width ---- */
+.narrow-only { display: none; }
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; padding: 6px 10px; gap: 6px; }
+  .wide-only { display: none; }
+  .narrow-only { display: inline; }
+  .brand { font-size: 18px; margin-right: 4px; }
+  .nav { order: 3; width: 100%; overflow-x: auto; }
+  .settings-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .settings-label { padding-top: 0; font-weight: 500; }
+}
