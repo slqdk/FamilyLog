@@ -2,6 +2,26 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.8 - 2026-10-17
+
+More in the Dagbog.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`. The new fields
+are on for everyone; turn them off per person under Dagbog → Settings in
+the admin app (alcohol for the children, say).
+
+- **Motion**: a slider in half hours, 0-8 hours.
+- **Sodavand**: a slider, 0-10 glas. "Sodavand" leaves the food list (days
+  that had it keep it).
+- **Alkohol** is a slider now too, 0-20 genstande (it was + / −).
+- **Sygdom og skader**: tap what it was (forkølet, feber, hoste, ondt i
+  halsen, mavepine, hovedpine, migræne, allergi, skadet, ondt i ryggen,
+  andet) and a short note. The family sees it in the week - unlike the
+  day's highlight, which stays private.
+- The family week shows motion, sodavand and sickness for a day.
+- Fixed: Cyklus could for a moment show the last chosen day's
+  explanation under the new one's heading.
+
 ## 0.3.7 - 2026-10-17
 
 **ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.

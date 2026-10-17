@@ -76,13 +76,46 @@ def _m003_mental_ten(con: sqlite3.Connection) -> None:
                         (json.dumps(tags, ensure_ascii=False),))
 
 
+def _m004_more_fields(con: sqlite3.Connection) -> None:
+    """0.3.8: motion (minutes, in half hours), sodavand, sickness and
+    injuries. A person whose fields were set by hand gets the new ones too
+    (the administrator turns them off per person). Sodavand leaves a saved
+    food list - it is its own slider now."""
+    import json
+    from app.core.migrations import add_column
+    add_column(con, "dagbog_entries", "exercise", "INTEGER")
+    add_column(con, "dagbog_entries", "soda", "INTEGER")
+    add_column(con, "dagbog_entries", "sick", "TEXT NOT NULL DEFAULT '[]'")
+    add_column(con, "dagbog_entries", "sick_note", "TEXT NOT NULL DEFAULT ''")
+    for r in con.execute("SELECT user_id, fields FROM dagbog_members").fetchall():
+        try:
+            fields = json.loads(r[1])
+        except ValueError:
+            continue
+        added = [f for f in ("exercise", "soda", "sick") if f not in fields]
+        if added and isinstance(fields, list):
+            con.execute("UPDATE dagbog_members SET fields = ? WHERE user_id = ?",
+                        (json.dumps(fields + added), r[0]))
+    # Sodavand has its own slider now: off the food list (days that had it keep it).
+    r = con.execute("SELECT value FROM dagbog_settings WHERE key = 'foods'").fetchone()
+    if r:
+        try:
+            foods = json.loads(r[0])
+        except ValueError:
+            foods = None
+        if isinstance(foods, list) and any(str(x).lower() == "sodavand" for x in foods):
+            con.execute("UPDATE dagbog_settings SET value = ? WHERE key = 'foods'",
+                        (json.dumps([x for x in foods if str(x).lower() != "sodavand"], ensure_ascii=False),))
+
+
 SECTION = Section(
     id="dagbog",
     title="Dagbog",
     router=router,
     migrations=[(1, "dagbog entries, settings, members", _m001_dagbog),
                 (2, "food categories", _m002_foods),
-                (3, "mental readiness 1-10, childcare activity", _m003_mental_ten)],
+                (3, "mental readiness 1-10, childcare activity", _m003_mental_ten),
+                (4, "motion, sodavand, sickness", _m004_more_fields)],
     family_prefixes=("/api/dagbog/",),
     on_user_deleted=dagbog.forget_user,
 )

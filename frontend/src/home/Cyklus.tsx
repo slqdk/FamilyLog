@@ -197,7 +197,10 @@ function Own({ own, options, today, busy, act, reload, selected, setSelected }: 
   const word = isToday ? 'i dag' : 'denne dag';
   const lastPeriod = own.periods[0];
   const endsOpen = !!lastPeriod && !lastPeriod.end && selected >= lastPeriod.start && selKind === 'period';
-  const ins = info && info.phase ? info : null;
+  // Only ever the chosen day's explanation - never the last day's while the
+  // new one loads (0.3.8).
+  const cur = info && info.day === selected ? info : null;
+  const ins = cur && cur.phase ? cur : null;
 
   return (
     <>
@@ -270,14 +273,14 @@ function Own({ own, options, today, busy, act, reload, selected, setSelected }: 
       )}
 
       {ins?.forecast && <ForecastCard f={ins.forecast} text={ins.text} title={isToday ? 'Humør og adfærd i dag' : `Humør og adfærd · ${shortDate(selected)}`} />}
-      {info && !info.phase && !s.empty && <section className="cy-card"><p className="cy-dim">{info.text}</p></section>}
+      {cur && !cur.phase && !s.empty && <section className="cy-card"><p className="cy-dim">{cur.text}</p></section>}
 
-      {info?.log && (info.log.flow || info.log.symptoms.length > 0 || info.log.moods.length > 0) && (
+      {cur?.log && (cur.log.flow || cur.log.symptoms.length > 0 || cur.log.moods.length > 0) && (
         <section className="cy-card" aria-label="Logget">
           <h3 className="cy-h3">Logget {isToday ? 'i dag' : shortDate(selected)}</h3>
           <div className="cy-chips cy-chips-ro">
-            {info.log.flow && <span>{options.flows.find((f) => f.key === info.log!.flow)?.label}</span>}
-            {[...info.log.symptoms, ...info.log.moods].map((x) => <span key={x}>{x}</span>)}
+            {cur.log.flow && <span>{options.flows.find((f) => f.key === cur.log!.flow)?.label}</span>}
+            {[...cur.log.symptoms, ...cur.log.moods].map((x) => <span key={x}>{x}</span>)}
           </div>
         </section>
       )}

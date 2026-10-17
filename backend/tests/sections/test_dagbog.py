@@ -35,8 +35,8 @@ FULL = {"day": TODAY, "mood": 4, "mental": 8, "foods": ["hjemmelavet", "Kage"],
 
 def test_config_has_every_field_and_the_default_tags(client):
     c = client.get("/api/dagbog/config").json()
-    assert [f["key"] for f in c["fields"]] == ["mood", "mental", "foods", "alcohol", "tags",
-                                                "highlight"]                 # 0.2.1: no sleep/energy
+    assert [f["key"] for f in c["fields"]] == ["mood", "mental", "exercise", "foods", "soda", "alcohol",
+                                                "tags", "sick", "highlight"]  # 0.3.8: motion, sodavand, sygdom
     assert c["fields"][0]["faces"][4] == "😄" and c["today"] == TODAY
     assert (c["fields"][0]["max"], c["fields"][1]["max"]) == (5, 10)     # mood 1-5, overskud 1-10
     for t in ("Sport", "Computer", "Fjernsyn", "Vedligehold af hus og have", "Børnepasning"):
@@ -192,3 +192,38 @@ def test_the_family_week_is_the_family_only(client):
     assert [e["mood"] for e in fam["entries"]] == [5]                 # the admin's day, not sanne's
     assert sanne.get(f"/api/dagbog/family?frm={TODAY}&to={TODAY}").status_code == 403
     assert sanne.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"]["mood"] == 1
+
+
+def test_motion_sodavand_alkohol_as_sliders_and_sickness(client):
+    """0.3.8 (Søren): motion in half hours, sodavand and alkohol as sliders,
+    sickness and injuries as a field - the family sees them, not the note's
+    owner only (it is not the private highlight)."""
+    mor = _login(client, "mor", "familie-kode-1")
+    c = mor.get("/api/dagbog/config").json()
+    f = {x["key"]: x for x in c["fields"]}
+    assert (f["exercise"]["kind"], f["exercise"]["step"], f["exercise"]["max"]) == ("slider", 30, 480)
+    assert f["alcohol"]["kind"] == "slider" and f["soda"]["unit"] == "glas" and "Feber" in f["sick"]["options"]
+    e = mor.put("/api/dagbog/entry", json={"day": TODAY, "exercise": 90, "soda": 2, "alcohol": 0,
+                                           "sick": ["feber", "Hoste"], "sickNote": "Lagt i seng"}).json()["entry"]
+    assert (e["exercise"], e["soda"], e["alcohol"], e["sick"], e["sickNote"]) == (90, 2, 0, ["Feber", "Hoste"], "Lagt i seng")
+    for body, needle in (({"exercise": 45}, "halve timer"), ({"exercise": 510}, "halve timer"),
+                         ({"soda": 11}, "glas"), ({"alcohol": 21}, "genstande"),
+                         ({"sick": ["Pest"]}, "Ukendt sygdom"), ({"sickNote": "x" * 201, "sick": []}, "for lang")):
+        r = mor.put("/api/dagbog/entry", json={"day": TODAY, **body})
+        assert r.status_code == 400 and needle in r.json()["detail"], (body, r.text)
+    fam = client.get(f"/api/dagbog/family?frm={TODAY}&to={TODAY}").json()["entries"][0]
+    assert (fam["exercise"], fam["sick"]) == (90, ["Feber", "Hoste"])
+
+
+def test_migration_4_gives_hand_set_people_the_new_fields(fresh_db):
+    import json
+    from app.core import auth, db
+    from app.sections.dagbog import _m004_more_fields, dagbog
+    u = auth.create_user("barn", "familie-kode-1", "family")
+    dagbog.set_foods(["Pizza", "Sodavand", "Kage"])
+    with db.connect() as con:
+        con.execute("INSERT INTO dagbog_members (user_id, fields) VALUES (?, ?)",
+                    (u["id"], json.dumps(["mood", "tags"])))
+        _m004_more_fields(con)                           # idempotent: the columns exist already
+    assert dagbog.fields_for(u["id"]) == ["mood", "exercise", "soda", "tags", "sick"]
+    assert dagbog.foods() == ["Pizza", "Kage"]

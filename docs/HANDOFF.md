@@ -5,6 +5,20 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.8 - Start here
+
+Dagbog fields now: mood, mental, exercise (kind `slider`, minutes, step 30,
+`format: "hours"`), foods, soda (`slider`), alcohol (`slider`, was `count`),
+tags, sick (kind `sick`: `options` + `sickNote`), highlight. `SLIDERS` in
+dagbog.py validates min/max/step. Dagbog migration 4 adds the columns
+(exercise, soda, sick, sick_note), adds the new fields to hand-set members
+and drops "Sodavand" from a saved food list. Frontend `SliderField` handles
+every slider (min 1 = a scale, `x/10`; min 0 = an amount with unit;
+`hoursText()` for motion). Søren wants statistics on the Dagbog later
+("Mønstre" - e.g. mood on days with Sport vs without, vs Økonomi/Cyklus).
+
+---
+
 ## 0.3.7 - Start here
 
 Dagbog: `SliderField` in `src/home/Dagbog.tsx` renders scales with max > 5

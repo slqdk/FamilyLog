@@ -114,6 +114,7 @@
 .hm-slider-ticks { display: flex; justify-content: space-between; padding: 0 9px; font-size: 13px; color: var(--fm-dim); }
 .hm-slider-ticks span { width: 14px; text-align: center; }
 .hm-slider-ticks span.on { color: var(--fm-olive-deep); font-weight: 800; }
+.hm-sick-note { margin-top: 10px; font-size: 16px; }
 .hm-slider-clear { font-size: 13px; padding: 0; }
 .hm-scale-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--fm-dim); margin-top: 6px; }
 .hm-count { display: flex; align-items: center; gap: 12px; }

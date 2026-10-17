@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type OkOverview } from './api';
 import { Shortcuts } from './HomeApp';
 import { Chat } from './Chat';
-import { DagbogPage, weekNumber } from './Dagbog';
+import { DagbogPage, hoursText, weekNumber } from './Dagbog';
 import { CyklusCalendar, CyklusDayPage, CyklusPage } from './Cyklus';
 import { OkonomiPage } from './Okonomi';
 import { addDays, addMonths, dayTitle, face, kr, longDate, mean, monthGrid, monthTitle, parseRoute, routeHash, todayLocal, weekStart } from './logic';
@@ -33,6 +33,10 @@ describe('front page logic', () => {
     expect(g.filter(Boolean)).toHaveLength(31);
     expect(kr(12345.6).replace(/\s/g, ' ')).toBe('12.346 kr');
     expect(kr(-9.5, true).replace(/\s/g, ' ')).toBe('-9,50 kr');
+  });
+
+  it('motion in hours', () => {
+    expect([0, 30, 60, 90, 480].map(hoursText)).toEqual(['0 t', '½ t', '1 t', '1½ t', '8 t']);
   });
 
   it('counts days and weeks in local time', () => {
@@ -149,9 +153,12 @@ const CONFIG: DagbogConfig = {
   fields: [
     { key: 'mood', kind: 'scale', label: 'Humør', low: 'Rigtig skidt', high: 'Rigtig godt', faces: ['😞', '🙁', '😐', '🙂', '😄'] },
     { key: 'mental', kind: 'scale', label: 'Mentalt overskud', low: 'Intet overskud', high: 'Masser af overskud', max: 10 },
+    { key: 'exercise', kind: 'slider', label: 'Motion', min: 0, max: 480, step: 30, unit: 'min', format: 'hours' },
     { key: 'foods', kind: 'foods', label: 'Mad', hint: 'Hvad spiste du i dag?' },
-    { key: 'alcohol', kind: 'count', label: 'Alkohol', unit: 'genstande', max: 30 },
+    { key: 'soda', kind: 'slider', label: 'Sodavand', min: 0, max: 10, step: 1, unit: 'glas' },
+    { key: 'alcohol', kind: 'slider', label: 'Alkohol', min: 0, max: 20, step: 1, unit: 'genstande' },
     { key: 'tags', kind: 'tags', label: 'Aktiviteter' },
+    { key: 'sick', kind: 'sick', label: 'Sygdom og skader', options: ['Feber', 'Skadet'] },
     { key: 'highlight', kind: 'private', label: 'Dagens højdepunkt' },
   ],
 };
@@ -174,15 +181,20 @@ describe('Dagbog', () => {
     fireEvent.click(screen.getByText('Hjemmelavet'));
     fireEvent.click(screen.getByText('Kage'));
     expect(screen.queryByText('Søvn')).toBeNull();
-    fireEvent.click(screen.getByLabelText('Flere'));
-    fireEvent.click(screen.getByLabelText('Flere'));
+    const motion = screen.getByRole('slider', { name: 'Motion' });       // half hours (0.3.8)
+    expect(motion).toHaveAttribute('step', '30');
+    fireEvent.change(motion, { target: { value: '90' } });
+    expect(motion).toHaveAttribute('aria-valuetext', '1½ t');
+    fireEvent.change(screen.getByRole('slider', { name: 'Alkohol' }), { target: { value: '2' } });
     fireEvent.click(screen.getByText('Sport'));
+    fireEvent.click(screen.getByText('Feber'));
+    fireEvent.change(screen.getByLabelText('Om sygdommen'), { target: { value: 'I seng' } });
     fireEvent.change(screen.getByPlaceholderText('Hvad var det bedste ved dagen?'), { target: { value: 'Mål!' } });
     expect(screen.getByText('🔒 Kun du kan se teksten og billedet.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Gem dagen'));
     await waitFor(() => expect(save).toHaveBeenCalledWith({
-      day: '2026-10-17', mood: 4, mental: 8, alcohol: 2, foods: ['Hjemmelavet', 'Kage'],
-      tags: ['Sport'], highlight: 'Mål!' }));
+      day: '2026-10-17', mood: 4, mental: 8, alcohol: 2, exercise: 90, soda: null, foods: ['Hjemmelavet', 'Kage'],
+      tags: ['Sport'], sick: ['Feber'], sickNote: 'I seng', highlight: 'Mål!' }));
     expect(await screen.findByText('Gemt ✓')).toBeInTheDocument();
   });
 });

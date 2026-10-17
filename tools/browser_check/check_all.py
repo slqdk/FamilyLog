@@ -255,13 +255,16 @@ with sync_playwright() as p:
     check("Mentalt overskud is a 1-10 slider (0.3.7)", slider.get_attribute("max") == "10"
           and slider.get_attribute("aria-valuetext") == "Ikke valgt")
     slider.fill("7")
-    check("the slider sets 7", "7/10" in fp.locator(".hm-slider-value").inner_text())
+    check("the slider sets 7", "7/10" in fp.locator(".hm-field[aria-label='Mentalt overskud'] .hm-slider-value").inner_text())
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Hjemmelavet").click()
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Kage").click()
-    fp.get_by_label("Flere").click()
+    fp.locator(".hm-field[aria-label='Motion'] input[type=range]").fill("90")
+    check("Motion is a half-hour slider (0.3.8)", "1½ t" in fp.locator(".hm-field[aria-label='Motion'] .hm-slider-value").inner_text())
+    fp.locator(".hm-field[aria-label='Alkohol'] input[type=range]").fill("1")
+    fp.locator(".hm-field[aria-label='Sygdom og skader'] .hm-tags button", has_text="Hoste").click()
     fp.locator(".hm-tags button", has_text="Sport").click()
     fp.locator(".hm-tags button", has_text="Børnepasning").click()
-    fp.locator(".hm-text").fill("Hemmelig dagbogstekst")
+    fp.locator("textarea.hm-text").fill("Hemmelig dagbogstekst")
     from PIL import Image
     import io
     buf = io.BytesIO()

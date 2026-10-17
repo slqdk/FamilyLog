@@ -35,19 +35,35 @@ SCALES = {
     "mental": {"label": "Mentalt overskud", "low": "Intet overskud", "high": "Masser af overskud",
                "max": 10},
 }
+# Amounts as sliders (0.3.8, Søren): motion in half hours, sodavand and
+# alkohol in glasses/units. Stored as plain numbers (motion in minutes).
+SLIDERS = {
+    "exercise": {"label": "Motion", "min": 0, "max": 480, "step": 30, "unit": "min", "format": "hours",
+                 "hint": "Hvor længe var du i gang i dag?"},
+    "soda": {"label": "Sodavand", "min": 0, "max": 10, "step": 1, "unit": "glas"},
+    "alcohol": {"label": "Alkohol", "min": 0, "max": 20, "step": 1, "unit": "genstande"},
+}
+SICK = ["Forkølet", "Feber", "Hoste", "Ondt i halsen", "Mavepine", "Hovedpine", "Migræne",
+        "Allergi", "Skadet", "Ondt i ryggen", "Andet"]
+MAX_SICK_NOTE = 200
 FIELDS = {
     **{k: {"kind": "scale", **v} for k, v in SCALES.items()},
+    "exercise": {"kind": "slider", **SLIDERS["exercise"]},
     "foods": {"kind": "foods", "label": "Mad", "hint": "Hvad spiste du i dag?"},
-    "alcohol": {"kind": "count", "label": "Alkohol", "unit": "genstande", "max": 30},
+    "soda": {"kind": "slider", **SLIDERS["soda"]},
+    "alcohol": {"kind": "slider", **SLIDERS["alcohol"]},
     "tags": {"kind": "tags", "label": "Aktiviteter", "hint": "Hvad lavede du i dag?"},
+    "sick": {"kind": "sick", "label": "Sygdom og skader", "hint": "Var du syg eller kom til skade?",
+             "options": SICK},
     "highlight": {"kind": "private", "label": "Dagens højdepunkt"},
 }
 FIELD_ORDER = list(FIELDS)
 DEFAULT_TAGS = ["Skole/arbejde", "Sport", "Computer", "Gaming", "Fjernsyn", "Mobil",
                 "Vedligehold af hus og have", "Rengøring", "Madlavning", "Indkøb",
                 "Børnepasning", "Venner", "Familie", "Udenfor", "Læsning", "Hobby", "Fri", "Syg"]
+# Sodavand left the food list in 0.3.8 - it has its own slider now.
 DEFAULT_FOODS = ["Hjemmelavet", "Fastfood", "Takeaway", "Restaurant", "Kage", "Chips",
-                 "Slik", "Is", "Sodavand", "Frugt og grønt", "Morgenmad", "Madpakke"]
+                 "Slik", "Is", "Frugt og grønt", "Morgenmad", "Madpakke"]
 LISTS = {"tags": DEFAULT_TAGS, "foods": DEFAULT_FOODS}
 MAX_TAGS = 40
 MAX_TAG = 30
@@ -164,14 +180,16 @@ def _day(value) -> str:
     return d.isoformat()
 
 
-_COLUMNS = ("mood", "mental", "alcohol")
+_COLUMNS = ("mood", "mental", "alcohol", "exercise", "soda")
 
 
 def _entry_dto(r, own: bool) -> dict:
     out = {"userId": r["user_id"], "day": r["day"],
            **{c: r[c] for c in _COLUMNS},
            "foods": json.loads(r["foods"] or "[]"),
-           "tags": json.loads(r["tags"] or "[]"), "updatedAt": r["updated_at"]}
+           "tags": json.loads(r["tags"] or "[]"),
+           "sick": json.loads(r["sick"] or "[]"), "sickNote": r["sick_note"] or "",
+           "updatedAt": r["updated_at"]}
     if own:
         # Only the author ever gets these keys (the privacy rule).
         out["highlight"] = r["highlight"] or ""
@@ -199,11 +217,17 @@ def save_entry(user_id: int, body: dict) -> dict:
         if v is not None and (not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= top):
             raise Invalid(f"{FIELDS[key]['label']} skal være 1-{top}.")
         values[key] = v
-    a = body.get("alcohol") if "alcohol" in allowed else None
-    if a is not None and (not isinstance(a, int) or isinstance(a, bool)
-                          or not 0 <= a <= FIELDS["alcohol"]["max"]):
-        raise Invalid(f"Alkohol skal være 0-{FIELDS['alcohol']['max']} genstande.")
-    values["alcohol"] = a
+    for key, s in SLIDERS.items():
+        v = body.get(key) if key in allowed else None
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or not s["min"] <= v <= s["max"]
+                              or (v - s["min"]) % s["step"]):
+            unit = "minutter i halve timer" if s.get("format") == "hours" else s["unit"]
+            raise Invalid(f"{s['label']} skal være {s['min']}-{s['max']} {unit}.")
+        values[key] = v
+    sick = _picked(body, allowed, "sick", SICK, "Ukendt sygdom")
+    sick_note = str(body.get("sickNote") or "").strip() if "sick" in allowed else ""
+    if len(sick_note) > MAX_SICK_NOTE:
+        raise Invalid(f"Sygdomsnoten er for lang (højst {MAX_SICK_NOTE} tegn).")
     chosen = _picked(body, allowed, "tags", tags(), "Ukendt aktivitet")
     eaten = _picked(body, allowed, "foods", foods(), "Ukendt madtype")
     highlight = ""
@@ -214,14 +238,15 @@ def save_entry(user_id: int, body: dict) -> dict:
     now = db.utcnow()
     with db.connect() as con:
         con.execute(
-            "INSERT INTO dagbog_entries (user_id, day, mood, mental, alcohol, foods,"
-            " tags, highlight, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+            "INSERT INTO dagbog_entries (user_id, day, mood, mental, alcohol, exercise, soda, foods,"
+            " tags, sick, sick_note, highlight, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(user_id, day) DO UPDATE SET mood=excluded.mood,"
-            " mental=excluded.mental, alcohol=excluded.alcohol, foods=excluded.foods,"
-            " tags=excluded.tags, highlight=excluded.highlight, updated_at=excluded.updated_at",
+            " mental=excluded.mental, alcohol=excluded.alcohol, exercise=excluded.exercise,"
+            " soda=excluded.soda, foods=excluded.foods, tags=excluded.tags, sick=excluded.sick,"
+            " sick_note=excluded.sick_note, highlight=excluded.highlight, updated_at=excluded.updated_at",
             (user_id, day, *(values[c] for c in _COLUMNS),
              json.dumps(eaten, ensure_ascii=False), json.dumps(chosen, ensure_ascii=False),
-             highlight, now, now))
+             json.dumps(sick, ensure_ascii=False), sick_note, highlight, now, now))
     return get_entry(user_id, day)
 
 
