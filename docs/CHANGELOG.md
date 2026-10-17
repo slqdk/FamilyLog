@@ -2,6 +2,28 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.5 - 2026-10-17
+
+More of Økonomi on the phone.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Tabs**: Overblik, Posteringer, Butikker, Udvikling.
+- **Any period and account** on Overblik and Posteringer: a month or a year
+  to step through, the last 12 months, everything, or your own dates; one
+  account or all. A longer period shows its average month.
+- **Posteringer**: search all transactions, filter by category and in/out,
+  sort by date or size, 50 at a time.
+- **Change any category**: tap a transaction, a shop, a top receiver or a
+  fixed cost to move the shop to another category or rename it - every
+  purchase there follows, and your choice is never overwritten.
+- **Butikker**: every shop and payee, the most money first, searchable and
+  filtered by category, with who placed it (you, Alf or a rule).
+- **Udvikling**: the months side by side (6, 12, 24 or all) - all spending
+  with income marked, or one category - and the average month.
+- Fixed: the step text under "Spørg Alf om økonomien" ("Forstår
+  spørgsmålet…") was light text on a light card.
+
 ## 0.3.4 - 2026-10-17
 
 Søren's first pass over the Økonomi categories.

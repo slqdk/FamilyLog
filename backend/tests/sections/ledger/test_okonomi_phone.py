@@ -153,3 +153,54 @@ def test_gender_is_set_by_the_administrator(client):
     assert c.patch(f"/api/users/{uid}", json={"gender": "female"}).status_code == 403
 
 
+
+
+# ---- 0.3.5: periods, accounts, search, shops, trends on the phone ------------------------
+
+def test_any_period_and_account(client):
+    _upload(client, big_export()[0], account="Lønkonto")
+    _upload(client, _unknown_shops(), name="kort.csv", account="MasterCard")
+    whole = client.get("/api/okonomi/overview").json()
+    assert whole["months"] > 30 and whole["perMonth"] > 0 and whole["baselinePerMonth"] is None
+    year = client.get("/api/okonomi/overview?frm=2025-01-01&to=2025-12-31").json()
+    assert year["months"] == 12 and not year["isMonth"]
+    month = client.get("/api/okonomi/overview?frm=2026-05-01&to=2026-05-31").json()
+    assert month["isMonth"] and month["baselineMonths"] == 6
+    card = client.get("/api/okonomi/overview?frm=2026-09-01&to=2026-09-30&account=MasterCard").json()
+    assert card["count"] == 3 and card["spent"] == 112.5 + 212.5 + 312.5
+    assert client.get("/api/okonomi/overview?frm=2026-9-1").status_code == 400
+
+
+def test_search_filter_and_sort_transactions(client):
+    _upload(client, big_export()[0])
+    t = client.get("/api/okonomi/transactions?q=davidsens&order=largest").json()
+    assert t["total"] == 31 and t["rows"][0]["amount"] <= t["rows"][-1]["amount"]
+    inn = client.get("/api/okonomi/transactions?direction=in&frm=2025-01-01&to=2025-12-31").json()
+    assert inn["total"] > 0 and all(r["amount"] > 0 for r in inn["rows"])
+    more = client.get("/api/okonomi/transactions?offset=50").json()
+    assert len(more["rows"]) == 50
+    assert client.get("/api/okonomi/transactions?order=random").status_code == 400
+
+
+def test_move_and_rename_any_shop(client):
+    _upload(client, big_export()[0])
+    shops = client.get("/api/okonomi/merchants?q=netto").json()
+    netto = shops["merchants"][0]
+    assert netto["categoryName"] == "Dagligvarer" and shops["categories"][0]["group"] == "Hus & bolig"
+    r = client.put("/api/okonomi/merchant", json={"key": netto["key"], "category": "shopping", "name": "Netto Skagen"})
+    assert r.status_code == 200
+    again = client.get("/api/okonomi/merchants?q=netto").json()["merchants"][0]
+    assert (again["name"], again["category"], again["source"]) == ("Netto Skagen", "shopping", "user")
+    assert client.get("/api/okonomi/transactions?merchant=" + netto["key"]).json()["rows"][0]["merchant"] == "Netto Skagen"
+    assert client.put("/api/okonomi/merchant", json={"key": netto["key"], "name": "  "}).json()["detail"] \
+        == "Butikken skal have et navn."
+
+
+def test_month_by_month(client):
+    _upload(client, big_export()[0])
+    tr = client.get("/api/okonomi/trend?months=12").json()
+    last = client.get("/api/okonomi/state").json()["lastDate"][:7]
+    assert len(tr["months"]) == 12 and tr["months"][-1]["month"] == last
+    assert all("groceries" in m["byCategory"] or m["spent"] >= 0 for m in tr["months"])
+    assert tr["categories"][0]["name"]
+    assert len(client.get("/api/okonomi/trend?months=0").json()["months"]) > 30

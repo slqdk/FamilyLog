@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type OkMonth } from './api';
+import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type OkOverview } from './api';
 import { Shortcuts } from './HomeApp';
 import { Chat } from './Chat';
 import { DagbogPage, weekNumber } from './Dagbog';
@@ -76,7 +76,7 @@ describe('shortcuts', () => {
   it('Økonomi opens the phone page for a family account with its own Økonomi', async () => {
     vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [] });
     vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: false, owner: 'far', count: 3, firstDate: null,
-      lastDate: null, uncategorised: 0, months: [], model: true, ask: null });
+      lastDate: null, uncategorised: 0, months: [], accounts: [], model: true, ask: null });
     vi.spyOn(homeApi, 'cyState').mockResolvedValue(NO_CY);
     render(<Shortcuts me={{ id: 3, username: 'mor', role: 'family' }} atlas="Alf’s Atlas" />);
     expect((await screen.findByText('Økonomi')).closest('a')).toHaveAttribute('href', '#/okonomi');
@@ -173,29 +173,72 @@ describe('Dagbog', () => {
   });
 });
 
-const MONTH: OkMonth = {
-  month: '2026-09', count: 40, spent: 12000, income: 30000, otherIn: 0, transfersOut: 0,
+const MONTH: OkOverview = {
+  from: '2026-09-01', to: '2026-09-30', account: null, isMonth: true, perMonth: 12000, months: 1,
+  count: 40, spent: 12000, income: 30000, otherIn: 0, transfersOut: 0,
   baselinePerMonth: 10000, baselineMonths: 6, days: null,
   categories: [{ key: 'groceries', name: 'Dagligvarer', spent: 5000, count: 20, usual: 4000 }],
-  topMerchants: [{ key: 'netto', name: 'Netto', spent: 2500, count: 9, categoryName: 'Dagligvarer' }],
-  recurring: [{ name: 'Forsikring', typical: 800, yearly: 9600, categoryName: 'Forsikring' }],
+  topMerchants: [{ key: 'netto', name: 'Netto', spent: 2500, count: 9, category: 'groceries', categoryName: 'Dagligvarer' }],
+  recurring: [{ key: 'tryg', name: 'Forsikring', typical: 800, yearly: 9600, category: 'insurance', categoryName: 'Forsikring' }],
 };
+const OK_STATE = { access: true as const, own: true, owner: 'mor', count: 40, firstDate: '2025-10-01', lastDate: '2026-09-30',
+  uncategorised: 2, months: ['2026-08', '2026-09'], accounts: ['Lønkonto', 'MasterCard'], model: true, ask: null };
+const TX = { date: '2026-09-03', merchant: 'Netto', text: 'NETTO SKAGEN', amount: -120, category: 'groceries',
+  categoryName: 'Dagligvarer', merchantKey: 'netto' };
+const CATS = [{ key: 'rent', name: 'Husleje', group: 'Hus & bolig' }, { key: 'groceries', name: 'Dagligvarer', group: 'Mad' }];
 
 describe('Økonomi on the phone', () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
-  it('shows the month against a usual one', async () => {
-    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: true, owner: 'mor', count: 40,
-      firstDate: '2026-08-01', lastDate: '2026-09-30', uncategorised: 2, months: ['2026-08', '2026-09'], model: true, ask: null });
-    const month = vi.spyOn(homeApi, 'okMonth').mockResolvedValue(MONTH);
-    vi.spyOn(homeApi, 'okTx').mockResolvedValue({ total: 1, sum: -120, rows: [{ date: '2026-09-03', merchant: 'Netto',
-      text: 'NETTO', amount: -120, category: 'groceries', categoryName: 'Dagligvarer', merchantKey: 'netto' }] });
+  beforeEach(() => { try { localStorage.clear(); } catch { /* */ } });
+
+  it('shows the month against a usual one, then a year and one account', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue(OK_STATE);
+    const ov = vi.spyOn(homeApi, 'okOverview').mockResolvedValue(MONTH);
+    vi.spyOn(homeApi, 'okTx').mockResolvedValue({ total: 1, sum: -120, rows: [TX] });
     render(<OkonomiPage month={null} me={{ role: 'family' }} />);
-    await waitFor(() => expect(month).toHaveBeenCalledWith('2026-09'));  // the newest month first
+    await waitFor(() => expect(ov).toHaveBeenCalledWith('2026-09-01', '2026-09-30', ''));  // the newest month first
     expect(await screen.findByText('20 % over en normal måned')).toBeInTheDocument();
     expect(screen.queryByText(/admin-appen/)).toBeNull();                // a family account has no admin app
     fireEvent.click(screen.getByText('Dagligvarer'));
     expect(await screen.findByLabelText('Posteringer: Dagligvarer')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Periode'), { target: { value: 'year' } });
+    await waitFor(() => expect(ov).toHaveBeenCalledWith('2026-01-01', '2026-12-31', ''));
+    fireEvent.change(screen.getByLabelText('Konto'), { target: { value: 'MasterCard' } });
+    await waitFor(() => expect(ov).toHaveBeenCalledWith('2026-01-01', '2026-12-31', 'MasterCard'));
+  });
+
+  it('searches transactions and moves a shop to another category', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue(OK_STATE);
+    vi.spyOn(homeApi, 'okOverview').mockResolvedValue(MONTH);
+    const tx = vi.spyOn(homeApi, 'okTx').mockResolvedValue({ total: 1, sum: -120, rows: [TX] });
+    vi.spyOn(homeApi, 'okMerchants').mockResolvedValue({ merchants: [], categories: CATS });
+    const set = vi.spyOn(homeApi, 'okSetMerchant').mockResolvedValue({ ok: true });
+    render(<OkonomiPage month={null} me={{ role: 'admin' }} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Posteringer' }));
+    fireEvent.change(screen.getByLabelText('Søg i posteringer'), { target: { value: 'netto' } });
+    await waitFor(() => expect(tx).toHaveBeenCalledWith(expect.objectContaining({ q: 'netto', frm: '2026-09-01' })));
+    fireEvent.click(await screen.findByLabelText(/Netto -120,00 kr - Dagligvarer/));
+    fireEvent.change(await screen.findByLabelText('Kategori for butikken'), { target: { value: 'rent' } });
+    fireEvent.click(screen.getByText('Gem'));
+    await waitFor(() => expect(set).toHaveBeenCalledWith('netto', { category: 'rent' }));
+  });
+
+  it('lists the shops and shows the months side by side', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue(OK_STATE);
+    vi.spyOn(homeApi, 'okOverview').mockResolvedValue(MONTH);
+    vi.spyOn(homeApi, 'okMerchants').mockResolvedValue({ categories: CATS, merchants: [{ key: 'netto', name: 'Netto',
+      category: 'groceries', categoryName: 'Dagligvarer', source: 'rule', sample: 'NETTO', count: 9, total: -2500, last: '2026-09-03' }] });
+    vi.spyOn(homeApi, 'okTrend').mockResolvedValue({ categories: [{ key: 'groceries', name: 'Dagligvarer', spent: 9000 }],
+      months: [{ month: '2026-08', spent: 9000, income: 30000, byCategory: { groceries: 4000 } },
+               { month: '2026-09', spent: 12000, income: 30000, byCategory: { groceries: 5000 } }] });
+    render(<OkonomiPage month={null} me={{ role: 'admin' }} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Butikker' }));
+    expect(await screen.findByText('Netto')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Udvikling' }));
+    expect(await screen.findByText(/Alt forbrug: 10.500 kr pr. måned i snit/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Hvad'), { target: { value: 'groceries' } });
+    expect(await screen.findByText(/Dagligvarer: 4.500 kr pr. måned i snit/)).toBeInTheDocument();
   });
 
   it('says so when there is no access', async () => {
@@ -206,7 +249,7 @@ describe('Økonomi on the phone', () => {
 
   it('an empty Økonomi starts with reading in a bank export, then places the shops', async () => {
     vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: true, owner: 'mor', count: 0,
-      firstDate: null, lastDate: null, uncategorised: 0, months: [], model: false, ask: null });
+      firstDate: null, lastDate: null, uncategorised: 0, months: [], accounts: [], model: false, ask: null });
     const data = { imports: [], accounts: [], count: 0, left: 1, model: false,
       uncategorised: [{ key: 'zxq', name: 'Zxq Butik', sample: 'ZXQ', count: 2, total: -300 }],
       categorise: { state: 'none', left: 1 }, categories: [{ key: 'rent', name: 'Husleje', group: 'Hus & bolig' }, { key: 'groceries', name: 'Dagligvarer', group: 'Mad' }] };

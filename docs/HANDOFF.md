@@ -5,6 +5,20 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.5 - Start here
+
+Phone Økonomi (`src/home/Okonomi.tsx`) has tabs and a `PeriodBar`
+(`periodRange()`: month/year/12m/all/custom → frm/to). New phone API in
+`okonomi_routes.py`: `GET /api/okonomi/overview?frm&to&account` (baseline
+only for a whole month), `GET /api/okonomi/trend?months&account`,
+`GET /api/okonomi/merchants?q&category`, `/transactions` takes q, frm, to,
+account, direction, order, offset; `PUT /api/okonomi/merchant` takes
+`category` and/or `name`; `state` has `accounts`. `MerchantSheet` is the one
+place a shop is moved/renamed. `.fm-sheet .fm-note` fixes light-on-light
+notes inside cards.
+
+---
+
 ## 0.3.4 - Start here
 
 Categories: `car` is gone; new keys `car-loan`, `car-tax`, `car-maintenance`,

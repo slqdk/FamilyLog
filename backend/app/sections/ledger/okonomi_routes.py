@@ -97,38 +97,111 @@ def okonomi_state(request: Request):
     return {"access": True, "own": lu == me["id"], "owner": _owner_name(lu),
             "count": s["count"], "firstDate": s["firstDate"], "lastDate": s["lastDate"],
             "uncategorised": s["uncategorised"], "months": months,
+            "accounts": [a["account"] for a in s["accounts"]],
             "model": bool(ledger.get_settings(lu)["model"]), "ask": _ask(me["id"], lu)}
 
 
-@router.get("/api/okonomi/month")
-def okonomi_month(month: str, request: Request):
-    lu = _ledger(request)
-    frm, to = _month_range(month)
-    o = ledger.overview(lu, frm, to, top=8, baseline=6)
+def _day_arg(s: str, what: str) -> str | None:
+    if not s:
+        return None
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        raise HTTPException(400, f"Ugyldig dato ({what}).")
+    return s
+
+
+def _whole_month(frm: str | None, to: str | None) -> bool:
+    if not frm or not to or frm[:7] != to[:7] or frm[8:] != "01":
+        return False
+    return (frm, to) == _month_range(frm[:7])
+
+
+def _overview(lu: int, frm: str | None, to: str | None, account: str | None) -> dict:
+    """The phone's overview for any period (0.3.5): a whole month is compared
+    with the six before; a longer one shows its average month."""
+    month = _whole_month(frm, to)
+    o = ledger.overview(lu, frm, to, account or None, top=10, baseline=6 if month else 0)
     base = (o["baseline"] or {}).get("categories", {})
+    n_months = max(1, len(o["months"]))
     return {
-        "month": month, "count": o["count"], "spent": o["spent"], "income": o["income"],
+        "from": frm, "to": to, "account": account or None, "isMonth": month,
+        "count": o["count"], "spent": o["spent"], "income": o["income"],
         "otherIn": o["otherIn"], "transfersOut": o["transfersOut"],
+        "perMonth": o["perMonth"], "months": n_months,
         "baselinePerMonth": (o["baseline"] or {}).get("perMonth"),
         "baselineMonths": (o["baseline"] or {}).get("months"),
         "days": o["days"],
         "categories": [{"key": c["key"], "name": ledger.category_da(c["key"]), "spent": c["spent"],
                         "count": c["count"], "usual": base.get(c["key"])} for c in o["categories"]],
         "topMerchants": [{"key": m["key"], "name": m["name"], "spent": m["spent"], "count": m["count"],
-                          "categoryName": ledger.category_da(m["category"])} for m in o["topMerchants"]],
-        "recurring": [{"name": r["name"], "typical": r["typical"], "yearly": r["yearly"],
-                       "categoryName": ledger.category_da(r["category"])} for r in o["recurring"][:12]],
+                          "category": m["category"], "categoryName": ledger.category_da(m["category"])}
+                         for m in o["topMerchants"]],
+        "recurring": [{"key": r["key"], "name": r["name"], "typical": r["typical"], "yearly": r["yearly"],
+                       "category": r["category"], "categoryName": ledger.category_da(r["category"])}
+                      for r in o["recurring"][:12]],
     }
 
 
-@router.get("/api/okonomi/transactions")
-def okonomi_transactions(month: str, request: Request, category: str = "*", merchant: str = "",
-                         offset: int = 0):
+@router.get("/api/okonomi/month")
+def okonomi_month(month: str, request: Request, account: str = ""):
     lu = _ledger(request)
     frm, to = _month_range(month)
-    t = ledger.transactions(lu, category=category, merchant=merchant or None, frm=frm, to=to,
-                            offset=offset, limit=50)
+    out = _overview(lu, frm, to, account)
+    out["month"] = month
+    return out
+
+
+@router.get("/api/okonomi/overview")
+def okonomi_overview(request: Request, frm: str = "", to: str = "", account: str = ""):
+    """Any period (empty = all) and account (empty = all)."""
+    lu = _ledger(request)
+    return _overview(lu, _day_arg(frm, "fra"), _day_arg(to, "til"), account)
+
+
+@router.get("/api/okonomi/trend")
+def okonomi_trend(request: Request, months: int = 12, account: str = ""):
+    """Month by month (0.3.5): spending, income and each category, for the
+    last `months` months of data (0 = all)."""
+    lu = _ledger(request)
+    s = ledger.summary(lu)
+    if not s["lastDate"]:
+        return {"months": [], "categories": []}
+    last = s["lastDate"][:7]
+    frm = None if months <= 0 else f"{ledger._month_add(last, -(max(1, min(months, 240)) - 1))}-01"
+    o = ledger.overview(lu, frm, _month_range(last)[1], account or None, top=1)
+    return {"months": [{"month": m["month"], "spent": m["spent"], "income": m["income"],
+                        "byCategory": m["byCategory"]} for m in o["months"]],
+            "categories": [{"key": c["key"], "name": ledger.category_da(c["key"]), "spent": c["spent"]}
+                           for c in o["categories"]]}
+
+
+@router.get("/api/okonomi/transactions")
+def okonomi_transactions(request: Request, month: str = "", frm: str = "", to: str = "",
+                         category: str = "*", merchant: str = "", q: str = "", account: str = "",
+                         direction: str = "", order: str = "newest", offset: int = 0):
+    lu = _ledger(request)
+    if month:
+        frm, to = _month_range(month)
+    else:
+        frm, to = _day_arg(frm, "fra") or "", _day_arg(to, "til") or ""
+    if direction not in ("", "in", "out") or order not in ("newest", "oldest", "largest", "smallest", "income"):
+        raise HTTPException(400, "Ugyldigt filter.")
+    t = ledger.transactions(lu, q=q[:100], category=category, merchant=merchant or None, frm=frm or None,
+                            to=to or None, account=account or None, direction=direction, order=order,
+                            offset=max(0, offset), limit=50)
     return {"total": t["total"], "sum": t["sum"], "rows": [_row(r) for r in t["rows"]]}
+
+
+@router.get("/api/okonomi/merchants")
+def okonomi_merchants(request: Request, q: str = "", category: str = "*"):
+    """Your shops and payees (0.3.5), the most money first - to move one to
+    another category or give it a better name."""
+    lu = _ledger(request)
+    rows = ledger.merchants(lu, q=q[:100], category=category, limit=300)
+    return {"merchants": [{"key": m["key"], "name": m["name"], "category": m["category"],
+                           "categoryName": ledger.category_da(m["category"]), "source": m["source"],
+                           "sample": m["sample"], "count": m["count"], "total": m["total"],
+                           "last": m["last"]} for m in rows],
+            "categories": _categories()}
 
 
 class AskBody(BaseModel):
@@ -144,6 +217,10 @@ def _danish(msg: str) -> str:
         return "Alf arbejder stadig på det sidste spørgsmål - stop det eller vent."
     if msg.startswith("Write a question"):
         return "Skriv et spørgsmål."
+    if msg.startswith("A merchant needs a name"):
+        return "Butikken skal have et navn."
+    if msg.startswith("Unknown category"):
+        return "Ukendt kategori."
     if msg.startswith("The question is too long"):
         return f"Spørgsmålet er for langt (højst {ledger_ask.MAX_QUESTION} tegn)."
     return msg
@@ -224,18 +301,22 @@ def okonomi_delete_import(import_id: int, request: Request):
 
 class CategoryBody(BaseModel):
     key: str
-    category: str
+    category: str | None = None
+    name: str | None = None
 
 
 @router.put("/api/okonomi/merchant")
 def okonomi_merchant(body: CategoryBody, request: Request):
+    """Move a shop to another category and/or rename it - all its
+    purchases follow. Your choice is never overwritten by the model."""
     lu = _ledger(request)
     try:
-        ok = ledger.set_category(lu, body.key, body.category)
+        if body.category is not None and not ledger.set_category(lu, body.key, body.category):
+            raise HTTPException(404, "Den butik findes ikke.")
+        if body.name is not None and not ledger.rename_merchant(lu, body.key, body.name):
+            raise HTTPException(404, "Den butik findes ikke.")
     except ledger.Invalid as exc:
-        raise HTTPException(400, str(exc))
-    if not ok:
-        raise HTTPException(404, "Den butik findes ikke.")
+        raise HTTPException(400, _danish(str(exc)))
     return {"ok": True}
 
 

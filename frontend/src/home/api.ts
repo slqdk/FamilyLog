@@ -65,7 +65,7 @@ export interface OkAsk {
 }
 export type OkState = { access: false } | {
   access: true; own: boolean; owner: string; count: number; firstDate: string | null; lastDate: string | null;
-  uncategorised: number; months: string[]; model: boolean; ask: OkAsk | null;
+  uncategorised: number; months: string[]; accounts: string[]; model: boolean; ask: OkAsk | null;
 };
 export interface OkData {
   imports: { id: number; account: string; filename: string; importedAt: string; added: number; firstDate: string | null; lastDate: string | null }[];
@@ -75,13 +75,28 @@ export interface OkData {
   categorise: { state: string; left: number; placed?: number; error?: string | null; ahead?: number | null };
   categories: { key: string; name: string; group?: string }[];
 }
-export interface OkMonth {
-  month: string; count: number; spent: number; income: number; otherIn: number; transfersOut: number;
+export interface OkOverview {
+  from: string | null; to: string | null; account: string | null; isMonth: boolean;
+  count: number; spent: number; income: number; otherIn: number; transfersOut: number;
+  perMonth: number; months: number;
   baselinePerMonth: number | null; baselineMonths: number | null;
   days: { date: string; spent: number }[] | null;
   categories: { key: string; name: string; spent: number; count: number; usual: number | null }[];
-  topMerchants: { key: string; name: string; spent: number; count: number; categoryName: string }[];
-  recurring: { name: string; typical: number; yearly: number; categoryName: string }[];
+  topMerchants: { key: string; name: string; spent: number; count: number; category: string; categoryName: string }[];
+  recurring: { key: string; name: string; typical: number; yearly: number; category: string; categoryName: string }[];
+}
+export type OkMonth = OkOverview & { month: string };
+export interface OkTxQuery {
+  frm?: string; to?: string; account?: string; category?: string; merchant?: string; q?: string;
+  direction?: '' | 'in' | 'out'; order?: 'newest' | 'oldest' | 'largest' | 'smallest' | 'income'; offset?: number;
+}
+export interface OkMerchant {
+  key: string; name: string; category: string; categoryName: string; source: string; sample: string;
+  count: number; total: number; last: string | null;
+}
+export interface OkTrend {
+  months: { month: string; spent: number; income: number; byCategory: Record<string, number> }[];
+  categories: { key: string; name: string; spent: number }[];
 }
 
 // ---- Cyklus (0.3.0) ----
@@ -162,12 +177,21 @@ export const homeApi = {
     .then(json<{ entry: DagbogEntry }>),
   okState: () => fetch('/api/okonomi/state').then(json<OkState>),
   okMonth: (month: string) => fetch(`/api/okonomi/month?month=${month}`).then(json<OkMonth>),
-  okTx: (month: string, filter: { category?: string; merchant?: string }) => {
-    const q = new URLSearchParams({ month });
-    if (filter.category !== undefined) q.set('category', filter.category);
-    if (filter.merchant) q.set('merchant', filter.merchant);
+  okOverview: (frm: string, to: string, account: string) =>
+    fetch(`/api/okonomi/overview?${new URLSearchParams({ frm, to, account })}`).then(json<OkOverview>),
+  okTx: (query: OkTxQuery) => {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== '' && v !== null) q.set(k, String(v));
+    if (query.category === '') q.set('category', '');
     return fetch(`/api/okonomi/transactions?${q}`).then(json<{ total: number; sum: number; rows: OkTx[] }>);
   },
+  okMerchants: (search: string, category: string) =>
+    fetch(`/api/okonomi/merchants?${new URLSearchParams({ q: search, category })}`)
+      .then(json<{ merchants: OkMerchant[]; categories: { key: string; name: string; group?: string }[] }>),
+  okSetMerchant: (key: string, change: { category?: string; name?: string }) =>
+    fetch('/api/okonomi/merchant', send('PUT', { key, ...change })).then(json<{ ok: boolean }>),
+  okTrend: (months: number, account: string) =>
+    fetch(`/api/okonomi/trend?${new URLSearchParams({ months: String(months), account })}`).then(json<OkTrend>),
   okData: () => fetch('/api/okonomi/data').then(json<OkData>),
   okImport: (file: File, account: string) => {
     const fd = new FormData();

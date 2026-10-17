@@ -33,7 +33,7 @@ FamilyMap is shown to the administrator only.
 title: Front page
 where: Top bar
 since: 0.2.0
-changed: 0.3.1
+changed: 0.3.5
 
 Opens the front page at **/** - what everyone in the family sees on the
 phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
@@ -44,7 +44,12 @@ in this admin app. On a phone, "Add to home screen" makes it an app icon.
 time (what went out, per category against a normal month, the biggest
 receivers, fixed costs), Alf to ask, and **Dine data** - read in a bank
 export (CSV or Excel), delete an import, place the shops no rule knows, or
-let the model place them. Administrator and user accounts always have it; a
+let the model place them. Since 0.3.5 it has tabs: **Overblik** (any period - a month or
+year to step through, the last 12 months, everything, or your own dates - and
+one account or all), **Posteringer** (search, category, in/out, order; tap
+one to move or rename its shop), **Butikker** (every shop, to move to another
+category or rename) and **Udvikling** (the months side by side, all spending
+or one category). Administrator and user accounts always have it; a
 family account when the administrator turns it on (Settings → Accounts).
 Nobody sees anyone else's Økonomi - the administrator included.
 
