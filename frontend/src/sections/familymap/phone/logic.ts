@@ -148,9 +148,13 @@ export function parseAnswer(text: string, known: Set<number>): AnswerPiece[][] {
   return text.split(/\n\s*\n/).map((para) => {
     const out: AnswerPiece[] = [];
     let last = 0;
-    for (const m of para.matchAll(/\s*\[\[(\d+)\]\]/g)) {
+    // [[id]] as asked; a model that writes [id] is understood too (FamilyLog
+    // 0.3.6) - a single-bracket number that is not a listed place stays text.
+    for (const m of para.matchAll(/\s*\[\[(\d+)\]\]|\s*\[(\d+)\]/g)) {
+      const single = m[2] !== undefined;
+      const id = Number(m[1] ?? m[2]);
+      if (single && !known.has(id)) continue;
       if (m.index! > last) out.push({ kind: 'text', text: para.slice(last, m.index) });
-      const id = Number(m[1]);
       if (known.has(id)) out.push({ kind: 'place', id });
       last = m.index! + m[0].length;
     }

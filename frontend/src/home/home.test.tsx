@@ -115,7 +115,19 @@ describe('Alf on the front page', () => {
     expect(await screen.findByText('Find en legeplads')).toBeInTheDocument();
     expect(screen.getByLabelText('Se Søparken')).toHaveAttribute('href', '/fm/#/sted/7');
     fireEvent.click(screen.getByText('Vis stedet'));
-    expect(screen.getByText('Søparken').closest('a')).toHaveAttribute('href', '/fm/#/sted/7');
+    expect(screen.getAllByText('Søparken').every((x) => x.closest('a')?.getAttribute('href') === '/fm/#/sted/7')).toBe(true);
+  });
+
+  it('links the place name itself, with one bracket or two (0.3.6)', async () => {
+    vi.spyOn(homeApi, 'chat').mockResolvedValue({ ...STATE, messages: [STATE.messages[0],
+      { ...STATE.messages[1], content: 'Her er pizza:\n\nSøparken [7] (0.5 km). Også **Søparken** [[7]].' }] });
+    render(<Chat me={{ id: 1, username: 'mor', role: 'family' }} resetKey={0} />);
+    const links = await screen.findAllByLabelText('Se Søparken');
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveTextContent('Søparken');
+    expect(links[0]).toHaveAttribute('href', '/fm/#/sted/7');
+    expect(screen.queryByText(/\[7\]/)).toBeNull();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
   });
 
   it('sends a message from an example and says when there is no model', async () => {

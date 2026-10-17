@@ -183,6 +183,7 @@ with sync_playwright() as p:
     page.fill("input[placeholder='Password (10+ characters)']", "familie-kode-1")
     page.get_by_role("button", name="Add family member").click()
     page.wait_for_selector("text=mor can now sign in at /fm/.")
+    wait_until(page, lambda: page.locator(".user-list .user-name", has_text="mor").count() == 1)   # the list reloads after
     check("family account added", page.locator(".user-list .user-name", has_text="mor").count() == 1)
     pid = page.request.post(BASE + "/api/fm/places", data={
         "name": "Søparkens Legeplads", "category": "playground", "lat": 55.246, "lng": 9.306}).json()["id"]

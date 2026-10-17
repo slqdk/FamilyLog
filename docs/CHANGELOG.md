@@ -2,6 +2,17 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.6 - 2026-10-17
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Smaller tiles** on the front page: the icon beside the name, about half
+  the height.
+- **Alf's places are links**: the place's name in an answer is the link to
+  it in Alf's Atlas (with a small 📍 after it). Answers where the model
+  wrote `[7088]` instead of `[[7088]]` are linked too - they showed as bare
+  numbers before.
+
 ## 0.3.5 - 2026-10-17
 
 More of Økonomi on the phone.

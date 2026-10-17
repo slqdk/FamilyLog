@@ -158,15 +158,47 @@ function AnswerText({ text, places }: { text: string; places: PlaceCard[] }) {
   return (
     <>
       {paras.map((para, i) => (
-        <p key={i} className="hm-p">
-          {para.map((a, j) => a.kind === 'text' ? <span key={j}>{a.text}</span> : (
-            <a key={j} className="fm-answer-link" href={`/fm/#/sted/${a.id}`}
-               aria-label={`Se ${known.get(a.id)?.name ?? 'stedet'}`}><span aria-hidden>📍</span></a>
+        <p key={i} className="hm-p">{linkNames(para, known).map((a, j) => a.kind === 'text'
+          ? <span key={j}>{a.text}</span>
+          : (
+            <a key={j} className={`fm-answer-link${a.name ? ' hm-named' : ''}`} href={`/fm/#/sted/${a.id}`}
+               aria-label={`Se ${known.get(a.id)?.name ?? 'stedet'}`}>
+              {a.name && <span className="hm-place-name">{a.name}</span>}<span aria-hidden> 📍</span></a>
           ))}
         </p>
       ))}
     </>
   );
+}
+
+type Piece = { kind: 'text'; text: string } | { kind: 'place'; id: number; name?: string };
+
+/** "Kebab House [[7088]]": the place's name just before its marker becomes
+    the link itself (0.3.6), not only the pin after it. */
+export function linkNames(para: ReturnType<typeof parseAnswer>[number], known: Map<number, PlaceCard>): Piece[] {
+  const out: Piece[] = [];
+  for (const a of para) {
+    if (a.kind === 'place') {
+      const prev = out[out.length - 1];
+      const name = known.get(a.id)?.name ?? '';
+      if (prev && prev.kind === 'text' && name) {
+        const m = prev.text.match(/^(.*?)(\*\*|")?\s*$/s);
+        const body = m ? m[1] : prev.text;
+        const close = m?.[2] ?? '';
+        const tail = body.slice(-name.length);
+        if (tail.toLowerCase() === name.toLowerCase()) {
+          let before = body.slice(0, body.length - name.length);
+          if (close && before.endsWith(close)) before = before.slice(0, -close.length);
+          prev.text = before;
+          if (!before) out.pop();
+          out.push({ kind: 'place', id: a.id, name: tail });
+          continue;
+        }
+      }
+      out.push({ kind: 'place', id: a.id });
+    } else out.push({ ...a });
+  }
+  return out;
 }
 
 function PlaceLink({ p }: { p: PlaceCard }) {

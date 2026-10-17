@@ -77,6 +77,11 @@ describe('parseAnswer', () => {
     expect(parseAnswer('Prøv Legeland [[1', new Set([1]))).toEqual([
       [{ kind: 'text', text: 'Prøv Legeland [[1' }]]);
   });
+  it('understands [id] too when the model writes one bracket (0.3.6)', () => {
+    expect(parseAnswer('Kebab House [7088] (0.5 km). Se punkt [2] i listen.', new Set([7088]))).toEqual([
+      [{ kind: 'text', text: 'Kebab House' }, { kind: 'place', id: 7088 },
+       { kind: 'text', text: ' (0.5 km). Se punkt [2] i listen.' }]]);
+  });
 });
 
 describe('map', () => {

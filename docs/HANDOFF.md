@@ -5,6 +5,16 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.6 - Start here
+
+`parseAnswer` (familymap/phone/logic.ts) also takes `[id]` - only when the
+id is a listed place, otherwise the text stays. `Chat.tsx` `linkNames()`
+turns the place name right before a marker (case-insensitive, `**` or `"`
+around it allowed) into the link text. Tiles: icon beside the name
+(`.hm-tile` is a 2-column grid).
+
+---
+
 ## 0.3.5 - Start here
 
 Phone Økonomi (`src/home/Okonomi.tsx`) has tabs and a `PeriodBar`
