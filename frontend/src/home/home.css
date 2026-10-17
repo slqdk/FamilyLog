@@ -333,8 +333,87 @@ body:has(.cy-page)::before { display: none; }
 .cy-num { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; font-weight: 700; }
 .cy-num input { width: 5em; text-align: center; }
 
+/* ---- Cyklus 0.3.1: a strip to swipe, a day explained, the full calendar ---- */
+.cy-strip-scroll { display: grid; grid-auto-flow: column; grid-auto-columns: 100%; overflow-x: auto;
+  scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+.cy-strip-scroll::-webkit-scrollbar { display: none; }
+.cy-strip-scroll > .cy-strip { scroll-snap-align: start; }
+button.cy-strip-day { border: none; background: none; padding: 0; cursor: pointer; font: inherit; }
+.cy-wd-today { color: var(--cy-ink) !important; font-weight: 800; font-size: 12px !important; letter-spacing: .02em; }
+.cy-sel { outline: 3px solid var(--cy-ink); outline-offset: 2px; }
+.cy-possible { border: 2px dotted var(--cy-rose); color: var(--cy-rose-deep); background: #fff0f3; }
+.cy-kicker { margin: 0 0 6px; font-weight: 700; font-size: 16px; color: var(--cy-dim); }
+.cy-chance-lav { background: #ece4f7; }
+.cy-chance-middel { background: #d9ccf4; }
+.cy-chance-høj { background: #c2abef; }
+.cy-ph-expect { background: #cfe0ff; }
+.cy-day-text { margin: 0 0 12px; font-size: 15.5px; color: var(--cy-ink); }
+.cy-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.cy-bars li { display: grid; grid-template-columns: 7.2em 1fr auto; align-items: center; gap: 10px; }
+.cy-bar-label { font-weight: 700; font-size: 15px; }
+.cy-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+.cy-bar i { height: 10px; border-radius: 5px; background: var(--cy-blush); }
+.cy-bar i.on { background: var(--cy-rose); }
+.cy-src { font-size: 12px; color: var(--cy-dim); min-width: 5.5em; text-align: right; }
+.cy-src-dig, .cy-src-dagbog { color: var(--cy-teal-deep); font-weight: 700; }
+.cy-behaviour { margin: 12px 0 0; font-size: 15px; }
+.cy-embedded { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--cy-blush); }
+.cy-shared-day { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: var(--cy-blush); }
+.cy-shared-day .cy-kicker { margin-bottom: 2px; font-size: 14px; }
+.cy-shared-day .cy-shared-line { font-size: 20px; }
+.cy-shared .cy-strip-scroll .cy-strip { padding: 10px 0 2px; }
+
+.cy-cal-page { padding-bottom: 120px; }
+.cy-cal-head { position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; padding: 12px 16px 8px; background: rgba(255, 243, 246, .94); backdrop-filter: blur(8px); }
+.cy-seg { display: flex; background: #f3dde3; border-radius: 999px; padding: 3px; }
+.cy-seg button { border: none; background: none; border-radius: 999px; padding: 8px 18px; font-weight: 700; font-size: 15px; color: var(--cy-dim); }
+.cy-seg button.on { background: #fff; color: var(--cy-ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .1); }
+.cy-today-link { font-size: 17px; }
+.cy-wd-row { position: sticky; top: 64px; z-index: 3; display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+  font-size: 13px; color: var(--cy-dim); padding: 4px 16px 6px; background: rgba(255, 243, 246, .94);
+  border-bottom: 1px solid var(--cy-blush); }
+.cy-months { padding: 0 16px; }
+.cy-month { scroll-margin-top: 100px; padding-top: 14px; }
+.cy-month-title { text-align: center; font-size: 19px; font-weight: 800; margin: 4px 0 10px; }
+.cy-cal-day { position: relative; border: none; background: none; padding: 0; display: grid; place-items: center; cursor: pointer; }
+.cy-cal-day:disabled { opacity: .4; cursor: default; }
+.cy-check { position: absolute; right: -2px; bottom: -2px; width: 18px; height: 18px; border-radius: 50%; display: grid;
+  place-items: center; font-size: 11px; font-weight: 800; background: #fff; border: 1.5px solid var(--cy-blush-2); color: #fff; }
+.cy-check.on { background: var(--cy-rose); border-color: var(--cy-rose); }
+.cy-editable .cy-dot { outline: 1.5px dashed var(--cy-blush-2); outline-offset: 1px; }
+.cy-cal-bottom { position: fixed; left: 0; right: 0; bottom: 0; max-width: 640px; margin: 0 auto; z-index: 4; text-align: center;
+  padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, #fff3f6 70%, rgba(255, 243, 246, 0)); }
+.cy-cal-bottom .cy-pill { min-width: 70%; }
+.cy-has-sheet { padding-bottom: 46vh; }
+.cy-sheet { position: fixed; left: 0; right: 0; bottom: 0; max-width: 640px; margin: 0 auto; z-index: 5; background: #fff;
+  border-radius: 24px 24px 0 0; box-shadow: 0 -6px 24px rgba(120, 30, 60, .16); padding: 18px 20px calc(18px + env(safe-area-inset-bottom));
+  max-height: 60vh; overflow-y: auto; }
+.cy-sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cy-sheet-head h3 { margin: 0; font-size: 22px; font-weight: 800; }
+.cy-x { width: 34px; height: 34px; border-radius: 50%; border: none; background: #e9e1e4; color: #fff; font-weight: 800; }
+.cy-sheet-title { font-size: 18px; font-weight: 800; margin: 8px 0 2px; }
+.cy-sheet-btn { display: block; text-align: center; text-decoration: none; margin-top: 12px; color: #fff !important; }
+.cy-year { padding: 0 8px; }
+.cy-year-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px 6px; padding: 0 8px; }
+.cy-mini { border: none; background: none; padding: 0; text-align: center; cursor: pointer; }
+.cy-mini-title { display: block; font-weight: 700; font-size: 15px; margin-bottom: 4px; }
+.cy-mini-title.on { color: var(--cy-rose-deep); font-weight: 800; }
+.cy-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px 0; }
+.cy-mini-day { font-style: normal; font-size: 10px; line-height: 15px; width: 15px; height: 15px; margin: 0 auto;
+  border-radius: 50%; color: var(--cy-ink); }
+.cy-mini-day.cy-period { background: var(--cy-rose); color: #fff; }
+.cy-mini-day.cy-predicted { border: none; background: #ffc9d6; color: var(--cy-rose-deep); }
+.cy-mini-day.cy-possible { border: 1px dotted var(--cy-rose); background: none; }
+.cy-mini-day.cy-fertile { background: none; color: var(--cy-teal-deep); font-weight: 700; }
+.cy-mini-day.cy-ovulation { background: none; color: var(--cy-teal-deep); border: 1px dotted var(--cy-teal); }
+.cy-mini-day.cy-pms { background: none; }
+.cy-mini-day.cy-today { box-shadow: 0 0 0 1.5px var(--cy-ink); }
+
 @media (max-width: 370px) {
   .cy-dot { width: 36px; height: 36px; font-size: 16px; }
+  .cy-bars li { grid-template-columns: 6.4em 1fr auto; }
 }
 
 @media (min-width: 700px) {

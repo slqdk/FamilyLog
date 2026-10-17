@@ -30,7 +30,7 @@ MOODS = ["Glad", "Rolig", "Energisk", "Følsom", "Irritabel", "Trist", "Urolig",
          "Humørsvingninger", "Stresset"]
 MAX_NOTE = 1000
 MAX_DAYS_BACK = 3 * 366
-MAX_RANGE = 186
+MAX_RANGE = 400                  # the year view asks for a whole year
 MAX_DAYS_AHEAD = 366
 
 PHASES = {
@@ -61,6 +61,30 @@ PHASES = {
                 "følsom eller irritabel.",
         "shared": "PMS er sandsynlig: humøret kan svinge. Lidt ekstra tålmodighed og overskud hjælper."},
 }
+# What a phase usually brings (0.3.1), 1-5, before her own data says otherwise.
+FORECAST_LABELS = {"energy": "Energi", "mood": "Humør", "overskud": "Overskud", "social": "Social lyst",
+                   "patience": "Tålmodighed"}
+PROFILES = {
+    "menstruation": {"energy": 2, "mood": 3, "social": 2, "patience": 3,
+                     "expect": ["Kramper", "Træt", "Rygsmerter"],
+                     "behaviour": "Lyst til ro, varme og nemme dage - mindre lyst til store planer."},
+    "follicular": {"energy": 4, "mood": 4, "social": 4, "patience": 4, "expect": [],
+                   "behaviour": "Mere energi og lyst til nye ting, træning og andre mennesker."},
+    "fertile": {"energy": 5, "mood": 5, "social": 5, "patience": 4, "expect": [],
+                "behaviour": "Ofte mest udadvendt, selvsikker og social - et godt tidspunkt til det, "
+                             "der kræver overskud."},
+    "ovulation": {"energy": 5, "mood": 5, "social": 5, "patience": 4, "expect": [],
+                  "behaviour": "Ofte mest udadvendt og social. Nogle mærker et lille stik i den ene side."},
+    "luteal": {"energy": 3, "mood": 4, "social": 3, "patience": 4,
+               "expect": ["Oppustet", "Trang til søde sager"],
+               "behaviour": "Roligere tempo - mere brug for søvn, mad med jævne mellemrum og hjemmehygge."},
+    "pms": {"energy": 2, "mood": 2, "social": 2, "patience": 2,
+            "expect": ["Irritabel", "Humørsvingninger", "Oppustet", "Ømme bryster", "Trang til søde sager"],
+            "behaviour": "Kortere lunte og mere følsom. Ekstra søvn, mindre stress og forståelse fra "
+                         "andre hjælper."},
+}
+CHANCE_LABELS = {"lav": "Lav", "middel": "Middel", "høj": "Høj"}
+
 DISCLAIMER = "Beregnet ud fra kalenderen og din log - ikke prævention og ikke medicinsk rådgivning."
 
 
@@ -168,15 +192,16 @@ def calendar(user_id: int, frm: str, to: str, today: date | None = None) -> list
     if b < a or (b - a).days > MAX_RANGE:
         raise Invalid(f"Højst {MAX_RANGE} dage ad gangen.")
     ps, today, cl, pl, flows, _s = _context(user_id, today)
-    kinds = predict.day_kinds(ps, a, b, today, cl, pl, flows)
+    days = predict.day_map(ps, a, b, today, cl, pl, flows)
     with db.connect() as con:
         logs = {r["day"]: r for r in con.execute(
             "SELECT * FROM cyklus_days WHERE user_id=? AND day BETWEEN ? AND ?",
             (user_id, a.isoformat(), b.isoformat()))}
     out = []
-    for d, k in sorted(kinds.items()):
+    for d, v in sorted(days.items()):
         r = logs.get(d.isoformat())
-        out.append({"day": d.isoformat(), "kind": k, "flow": r["flow"] if r else "",
+        out.append({"day": d.isoformat(), "kind": v["kind"], "cycleDay": v["cycleDay"],
+                    "flow": r["flow"] if r else "",
                     "logged": bool(r and (r["flow"] or r["symptoms"] != "[]" or r["moods"] != "[]"
                                           or r["note"]))})
     return out
@@ -241,6 +266,111 @@ def patterns(user_id: int, today: date | None = None) -> dict:
                      "mood": round(sum(e["mood"]) / len(e["mood"]), 1) if len(e["mood"]) >= 3 else None,
                      "mental": round(sum(e["mental"]) / len(e["mental"]), 1) if len(e["mental"]) >= 3 else None}
     return result
+
+
+def forecast_for(phase: str, pat: dict | None, use_diary: bool = True) -> dict:
+    """Mood and behaviour to expect in a phase: what the phase usually brings,
+    moved by what she has logged in that phase before (and, for her own
+    eyes, her Dagbog scores in it). Each value says where it came from."""
+    base = PROFILES.get(phase, PROFILES["follicular"])
+    vals = {k: [base[k], "typisk"] for k in ("energy", "mood", "social", "patience")}
+    top = [t["name"] for t in (pat or {}).get("top", [])]
+
+    def nudge(key: str, by: int) -> None:
+        vals[key] = [max(1, min(5, vals[key][0] + by)), "dig"]
+    if any(x in top for x in ("Irritabel", "Humørsvingninger", "Stresset", "Urolig")):
+        nudge("patience", -1)
+    if "Træt" in top:
+        nudge("energy", -1)
+    if "Energisk" in top:
+        nudge("energy", +1)
+    if any(x in top for x in ("Trist", "Følsom")):
+        nudge("mood", -1)
+    if any(x in top for x in ("Glad", "Rolig")):
+        nudge("mood", +1)
+    items = []
+    if use_diary and pat and pat.get("mood") is not None:
+        vals["mood"] = [max(1, min(5, round(pat["mood"]))), "dagbog"]
+    for k in ("energy", "mood"):
+        items.append({"key": k, "label": FORECAST_LABELS[k], "value": vals[k][0], "source": vals[k][1]})
+    if use_diary and pat and pat.get("mental") is not None:
+        items.append({"key": "overskud", "label": FORECAST_LABELS["overskud"],
+                      "value": max(1, min(5, round(pat["mental"] / 2))), "source": "dagbog"})
+    for k in ("social", "patience"):
+        items.append({"key": k, "label": FORECAST_LABELS[k], "value": vals[k][0], "source": vals[k][1]})
+    expect = [t for t in top if t != "Ingen gener"] or base["expect"]
+    return {"items": items, "expect": expect, "expectSource": "dig" if top else "typisk",
+            "behaviour": base["behaviour"]}
+
+
+def _next_period_in(st: dict, d: date) -> int | None:
+    if "nextStart" not in st:
+        return None
+    anchor = date.fromisoformat(st["nextStart"])
+    if d < anchor:
+        return (anchor - d).days
+    L = st["averages"]["cycle"]
+    k = (d - anchor).days // L + 1
+    return (anchor + timedelta(days=k * L) - d).days
+
+
+def day_info(user_id: int, day: str, today: date | None = None) -> dict:
+    """One day explained (0.3.1): what it is, why, the chance of pregnancy,
+    and the mood and behaviour to expect - for her own eyes."""
+    d = _day(day, future_ok=True)
+    ps, today, cl, pl, flows, _s = _context(user_id, today)
+    m = predict.day_map(ps, d, d, today, cl, pl, flows)[d]
+    st = predict.status(ps, today, cl, pl, flows)
+    out = {"day": d.isoformat(), "past": d < today, "isToday": d == today, "kind": m["kind"],
+           "cycleDay": m["cycleDay"], "phase": m["phase"], "log": get_day(user_id, d.isoformat()) if d <= today else None}
+    if m["phase"] is None:
+        out.update(title="Ingen forudsigelse",
+                   text="Log starten på din seneste menstruation, så kan Cyklus regne dagene ud."
+                        if not ps else "Der er ikke logget nok omkring den dag til at sige noget om den.")
+        return out
+    cd, ph, kind = m["cycleDay"], m["phase"], m["kind"]
+    label = PHASES[ph]["label"]
+    unc = predict.uncertainty(st["averages"])
+    if kind == "period":
+        title, lead = f"Menstruationsdag {cd}", "Menstruation, som du har logget."
+    elif kind == "predicted":
+        title, lead = "Menstruation ventes", "Ud fra dine cyklusser ventes menstruationen den dag."
+    elif kind == "possible":
+        title, lead = ("Menstruationen kan komme",
+                       f"Din cyklus varierer, så menstruationen kan komme op til {unc} dage før eller "
+                       f"efter det mest sandsynlige.")
+    elif kind == "ovulation":
+        title, lead = "Ægløsning (anslået)", "Den mest frugtbare dag ifølge kalenderen."
+    elif kind == "fertile" or ph in ("fertile", "ovulation"):
+        title, lead = "Frugtbar dag", "En af de anslåede frugtbare dage."
+    elif ph == "pms":
+        title, lead = "PMS-dag", "En af de sidste dage før menstruationen."
+    else:
+        title, lead = f"Cyklusdag {cd}", ""
+    nxt = _next_period_in(st, d) if d >= today else None
+    text = " ".join(x for x in (lead, PHASES[ph]["self"]) if x)
+    pats = patterns(user_id, today)
+    pat = pats.get("fertile" if ph == "ovulation" else ph)
+    out.update(title=title, sub=f"Cyklusdag {cd} · {label}", phaseLabel=label, text=text,
+               chance=m["chance"], chanceLabel=CHANCE_LABELS.get(m["chance"] or "lav"),
+               nextPeriodIn=nxt if kind not in ("period", "predicted") else None,
+               forecast=forecast_for(ph, pat, use_diary=True))
+    return out
+
+
+def toggle_period_day(user_id: int, day: str) -> None:
+    """The calendar's "edit period dates": one tap switches one day in or
+    out of her periods (today and before)."""
+    d = _day(day)
+    ps = _periods(user_id)
+    plen = predict.averages(ps)["period"]
+    new = predict.toggle_day(ps, d, date.today(), plen, _flow_days(user_id))
+    with db.connect() as con:
+        con.execute("DELETE FROM cyklus_periods WHERE user_id=?", (user_id,))
+        for p in new:
+            con.execute("INSERT INTO cyklus_periods (user_id, start, end, created_at, updated_at)"
+                        " VALUES (?,?,?,?,?)", (user_id, p.start.isoformat(),
+                                                p.end.isoformat() if p.end else None, db.utcnow(), db.utcnow()))
 
 
 def own(user_id: int) -> dict:
@@ -464,14 +594,97 @@ def _shared_card(owner_id: int, name: str, today: date) -> dict:
     if not s["shareFertile"]:
         week = [{**w, "kind": "" if w["kind"] in ("fertile", "ovulation") else w["kind"]} for w in week]
     card["week"] = week
+    pat = None
     if s["shareDetails"]:
         d = get_day(owner_id, today.isoformat())
         card["todayLog"] = {"flow": d["flow"], "symptoms": d["symptoms"], "moods": d["moods"]}
         pat = patterns(owner_id, today).get("fertile" if phase in ("fertile", "ovulation") else phase)
         # Her Dagbog scores per phase stay hers; the symptoms and moods she
         # logged here are what "details" shares.
-        card["pattern"] = {"label": pat["label"], "days": pat["days"], "top": pat["top"]} if pat else None
+        pat = {"label": pat["label"], "days": pat["days"], "top": pat["top"]} if pat else None
+        card["pattern"] = pat
+    # The mood and behaviour to expect today - by the phase as shared (so
+    # the fertile days stay hidden), moved by her logs only with "details".
+    card["forecast"] = forecast_for(phase, pat, use_diary=False)
     return card
+
+
+# ---- the days ahead, for the people she shares with (0.3.1) -------------------------------------
+# Søren: "the prediction and mood forecast shall be visible for the male as
+# well". The same day-by-day view as hers, through the same filter as the
+# card: fertile days and the chance of pregnancy only with share_fertile;
+# her own symptom patterns only with share_details; never her note, her
+# Dagbog scores or what she logged on a day.
+
+SHARED_BACK = 21          # days a viewer can look back
+SHARED_AHEAD = 120        # and ahead
+
+
+def _share_settings(owner_id: int, viewer_id: int) -> dict:
+    with db.connect() as con:
+        ok = con.execute(
+            "SELECT 1 FROM cyklus_shares s JOIN users u ON u.id = s.owner_id"
+            " WHERE s.owner_id=? AND s.viewer_id=? AND u.gender='female'", (owner_id, viewer_id)).fetchone()
+    if not ok:
+        raise Forbidden("Hun deler ikke sin cyklus med dig.")
+    return settings(owner_id)
+
+
+def _shared_window(a: date, b: date, today: date) -> None:
+    if a < today - timedelta(days=SHARED_BACK) or b > today + timedelta(days=SHARED_AHEAD) or b < a:
+        raise Invalid(f"Delt kan ses fra {SHARED_BACK} dage tilbage til {SHARED_AHEAD} dage frem.")
+
+
+def _shared_phase(phase: str | None, cd: int | None, s: dict, avg: dict) -> str | None:
+    if phase in ("fertile", "ovulation") and not s["shareFertile"]:
+        return "follicular" if (cd or 0) <= predict.ovulation_day(avg["cycle"], avg["period"]) else "luteal"
+    return phase
+
+
+def _shared_kind(kind: str, s: dict) -> str:
+    return "" if kind in ("fertile", "ovulation") and not s["shareFertile"] else kind
+
+
+def shared_calendar(viewer_id: int, owner_id: int, frm: str, to: str, today: date | None = None) -> list[dict]:
+    today = today or date.today()
+    s = _share_settings(owner_id, viewer_id)
+    a, b = _day(frm, future_ok=True), _day(to, future_ok=True)
+    _shared_window(a, b, today)
+    ps, today, cl, pl, flows, _s = _context(owner_id, today)
+    m = predict.day_map(ps, a, b, today, cl, pl, flows)
+    return [{"day": d.isoformat(), "kind": _shared_kind(v["kind"], s)} for d, v in sorted(m.items())]
+
+
+def shared_day(viewer_id: int, owner_id: int, day: str, today: date | None = None) -> dict:
+    today = today or date.today()
+    s = _share_settings(owner_id, viewer_id)
+    d = _day(day, future_ok=True)
+    _shared_window(d, d, today)
+    ps, today, cl, pl, flows, _s = _context(owner_id, today)
+    m = predict.day_map(ps, d, d, today, cl, pl, flows)[d]
+    st = predict.status(ps, today, cl, pl, flows)
+    out = {"day": d.isoformat(), "isToday": d == today, "kind": _shared_kind(m["kind"], s),
+           "cycleDay": m["cycleDay"], "phase": None}
+    if m["phase"] is None:
+        out.update(title="Ingen forudsigelse", text="Der er ikke logget nok til at sige noget om den dag.")
+        return out
+    phase = _shared_phase(m["phase"], m["cycleDay"], s, st["averages"])
+    kind, cd = out["kind"], m["cycleDay"]
+    title = {"period": f"Menstruationsdag {cd}", "predicted": "Menstruation ventes",
+             "possible": "Menstruationen kan komme", "ovulation": "Ægløsning (anslået)",
+             "fertile": "Frugtbar dag", "pms": "PMS-dag"}.get(kind) or (
+        "PMS-dag" if phase == "pms" else f"Cyklusdag {cd}")
+    pat = None
+    if s["shareDetails"]:
+        p = patterns(owner_id, today).get("fertile" if phase == "ovulation" else phase)
+        pat = {"label": p["label"], "days": p["days"], "top": p["top"]} if p else None
+    out.update(phase=phase, phaseLabel=PHASES[phase]["label"], title=title,
+               sub=f"Cyklusdag {cd} · {PHASES[phase]['label']}", text=PHASES[phase]["shared"],
+               nextPeriodIn=_next_period_in(st, d) if d >= today and kind not in ("period", "predicted") else None,
+               forecast=forecast_for(phase, pat, use_diary=False))
+    if s["shareFertile"]:
+        out.update(chance=m["chance"], chanceLabel=CHANCE_LABELS.get(m["chance"] or "lav"))
+    return out
 
 
 def options() -> dict:

@@ -551,7 +551,11 @@ function AskTab({ summary, onModel }: { summary: LedgerSummary; onModel: () => v
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { void api.listOllamaModels().then(setModels).catch(() => setModels([])); }, []);
-  useEffect(() => { ledgerApi.askState().then(setAsk).catch(() => {}); }, []);
+  // The latest ask when the page opens - unless a question was sent before
+  // that answer came back (0.3.1: a slow first reply set "none" over the
+  // fresh ask, and polling stopped).
+  const asked = useRef(false);
+  useEffect(() => { ledgerApi.askState().then((a) => { if (!asked.current) setAsk(a); }).catch(() => {}); }, []);
   const busy = ask?.state === 'queued' || ask?.state === 'working';
   useEffect(() => {
     if (!busy) return;
@@ -562,6 +566,7 @@ function AskTab({ summary, onModel }: { summary: LedgerSummary; onModel: () => v
   async function go(q = question) {
     if (!q.trim() || busy) return;
     setError(null);
+    asked.current = true;
     try {
       setAsk(await ledgerApi.ask(q.trim(), model || undefined));
       setQuestion('');

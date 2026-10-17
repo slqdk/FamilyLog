@@ -45,9 +45,40 @@ def cyklus_state(request: Request):
     return out
 
 
+@router.get("/api/cyklus/shared/calendar")
+def cyklus_shared_calendar(owner: int, frm: str, to: str, request: Request):
+    """Her days ahead as she shares them (any account she shares with)."""
+    me = _me(request, female=False)
+    try:
+        return {"days": _call(cyklus.shared_calendar, me["id"], owner, frm, to)}
+    except cyklus.Forbidden as exc:
+        raise HTTPException(403, str(exc))
+
+
+@router.get("/api/cyklus/shared/day")
+def cyklus_shared_day(owner: int, day: str, request: Request):
+    me = _me(request, female=False)
+    try:
+        return _call(cyklus.shared_day, me["id"], owner, day)
+    except cyklus.Forbidden as exc:
+        raise HTTPException(403, str(exc))
+
+
 @router.get("/api/cyklus/calendar")
 def cyklus_calendar(frm: str, to: str, request: Request):
     return {"days": _call(cyklus.calendar, _me(request)["id"], frm, to)}
+
+
+@router.get("/api/cyklus/dayinfo")
+def cyklus_dayinfo(day: str, request: Request):
+    return _call(cyklus.day_info, _me(request)["id"], day)
+
+
+@router.post("/api/cyklus/period/toggle")
+def cyklus_toggle(body: dict, request: Request):
+    uid = _me(request)["id"]
+    _call(cyklus.toggle_period_day, uid, body.get("day"))
+    return cyklus.own(uid)
 
 
 @router.get("/api/cyklus/day")

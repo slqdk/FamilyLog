@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { homeApi, type ChatState, type CyOwn, type CyState, type DagbogConfig, type OkMonth } from './api';
+import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type OkMonth } from './api';
 import { Shortcuts } from './HomeApp';
 import { Chat } from './Chat';
 import { DagbogPage, weekNumber } from './Dagbog';
-import { CyklusDayPage, CyklusPage } from './Cyklus';
+import { CyklusCalendar, CyklusDayPage, CyklusPage } from './Cyklus';
 import { OkonomiPage } from './Okonomi';
-import { addDays, addMonths, dayTitle, face, kr, mean, monthGrid, monthTitle, parseRoute, routeHash, weekStart } from './logic';
+import { addDays, addMonths, dayTitle, face, kr, longDate, mean, monthGrid, monthTitle, parseRoute, routeHash, todayLocal, weekStart } from './logic';
 
 describe('front page logic', () => {
   it('routes', () => {
@@ -220,21 +220,60 @@ const OWN: CyOwn = {
   today: { day: '2026-10-17', flow: '', symptoms: [], moods: [], note: '' },
 };
 
+const TODAY = todayLocal();
+const INFO: CyDayInfo = { day: TODAY, past: false, isToday: true, kind: '', cycleDay: 20, phase: 'luteal',
+  title: 'Cyklusdag 20', sub: 'Cyklusdag 20 · Lutealfase', phaseLabel: 'Lutealfase', text: 'Energien falder ofte lidt.',
+  chance: 'lav', chanceLabel: 'Lav', nextPeriodIn: 9, log: null,
+  forecast: { items: [{ key: 'energy', label: 'Energi', value: 3, source: 'typisk' }, { key: 'mood', label: 'Humør', value: 4, source: 'dagbog' }],
+    expect: ['Oppustet'], expectSource: 'typisk', behaviour: 'Roligere tempo.' } };
+
 describe('Cyklus', () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
-  it('her own page: the countdown, insights and a period start', async () => {
+  it('her own page: the countdown, the day explained and a period start', async () => {
     vi.spyOn(homeApi, 'cyState').mockResolvedValue({ enabled: true, shared: [], options: OPTIONS, own: OWN });
     vi.spyOn(homeApi, 'cyCalendar').mockResolvedValue({ days: [] });
+    const info = vi.spyOn(homeApi, 'cyDayInfo').mockImplementation(async (day) => ({ ...INFO, day,
+      title: day === TODAY ? 'Cyklusdag 20' : 'Menstruation ventes' }));
     const start = vi.spyOn(homeApi, 'cyStart').mockResolvedValue({ ...OWN,
       status: { ...OWN.status, inPeriod: true, periodDay: 1, cycleDay: 1, phase: 'menstruation' } });
     render(<CyklusPage />);
     expect(await screen.findByText('Menstruation om 9 dage')).toBeInTheDocument();
-    expect(screen.getByText('Det plejer du at mærke nu')).toBeInTheDocument();
+    expect(await screen.findByText('Humør og adfærd i dag')).toBeInTheDocument();
+    expect(screen.getByText('Chance for graviditet')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Energi 3 af 5' })).toBeInTheDocument();
+    // Tapping a coming day explains that day instead.
+    const later = addDays(TODAY, 9);
+    fireEvent.click(screen.getAllByRole('button', { pressed: false }).find((b) => b.getAttribute('aria-label')?.startsWith(dayTitle(later, TODAY)))!);
+    await waitFor(() => expect(info).toHaveBeenCalledWith(later));
+    expect(await screen.findByText('Menstruation ventes')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Tilbage til i dag'));
     expect(screen.getByText('Ikke prævention.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Menstruationen startede i dag'));
     await waitFor(() => expect(start).toHaveBeenCalled());
     expect(await screen.findByText('Menstruationsdag 1')).toBeInTheDocument();
+  });
+
+  it('someone she shares with taps a coming day for its prediction and mood', async () => {
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue({ enabled: false, options: OPTIONS, shared: [{
+      id: 2, name: 'mor', today: TODAY, empty: false, shareFertile: false, shareDetails: false,
+      cycleDay: 20, phase: 'luteal', phaseLabel: 'Lutealfase', phaseText: 'Energien kan være lidt lavere.',
+      inPeriod: false, periodDay: null, nextStart: addDays(TODAY, 9), daysUntilNext: 9, late: 0,
+      week: [], forecast: INFO.forecast }] });
+    vi.spyOn(homeApi, 'cySharedCalendar').mockResolvedValue({ days: [{ day: addDays(TODAY, 5), kind: 'pms' }] });
+    const sd = vi.spyOn(homeApi, 'cySharedDay').mockResolvedValue({ day: addDays(TODAY, 5), isToday: false, kind: 'pms',
+      cycleDay: 25, phase: 'pms', title: 'PMS-dag', sub: 'Cyklusdag 25 · PMS-dage', phaseLabel: 'PMS-dage',
+      text: 'PMS er sandsynlig.', nextPeriodIn: 4,
+      forecast: { items: [{ key: 'patience', label: 'Tålmodighed', value: 2, source: 'typisk' }], expect: ['Irritabel'],
+        expectSource: 'typisk', behaviour: 'Kortere lunte.' } });
+    render(<CyklusPage />);
+    expect(await screen.findByText('mor i dag: humør og adfærd')).toBeInTheDocument();
+    const later = addDays(TODAY, 5);
+    fireEvent.click(await screen.findByLabelText(`${dayTitle(later, TODAY)}: PMS`));
+    await waitFor(() => expect(sd).toHaveBeenCalledWith(2, later));
+    expect(await screen.findByText('PMS-dag')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Tålmodighed 2 af 5' })).toBeInTheDocument();
+    expect(screen.queryByText(/chance for graviditet/)).toBeNull();
   });
 
   it('a shared card shows what she shares and nothing else', async () => {
@@ -243,11 +282,29 @@ describe('Cyklus', () => {
       cycleDay: 25, phase: 'pms', phaseLabel: 'PMS-dage', phaseText: 'Lidt ekstra tålmodighed hjælper.',
       inPeriod: false, periodDay: null, nextStart: '2026-10-21', daysUntilNext: 4, late: 0,
       week: [{ day: '2026-10-17', kind: 'pms' }] }] });
+    vi.spyOn(homeApi, 'cySharedCalendar').mockResolvedValue({ days: [] });
     render(<CyklusPage />);
     expect(await screen.findByText('Menstruation om 4 dage')).toBeInTheDocument();
     expect(screen.getByText('PMS-dage')).toBeInTheDocument();
     expect(screen.queryByText(/Frugtbare/)).toBeNull();
     expect(screen.queryByText('Menstruationen startede i dag')).toBeNull();
+  });
+
+  it('the calendar: tap a day for its sheet, edit periods day by day, a year at a glance', async () => {
+    vi.spyOn(homeApi, 'cyCalendar').mockResolvedValue({ days: [{ day: TODAY, kind: 'period', cycleDay: 1, flow: '', logged: false }] });
+    vi.spyOn(homeApi, 'cyDayInfo').mockResolvedValue({ ...INFO, title: 'Menstruationsdag 1', cycleDay: 1 });
+    const toggle = vi.spyOn(homeApi, 'cyToggle').mockResolvedValue(OWN);
+    render(<CyklusCalendar month={null} />);
+    const day = await screen.findByLabelText(`${longDate(TODAY)}: menstruation`);
+    fireEvent.click(day);
+    expect(await screen.findByText('Menstruationsdag 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Luk'));
+    fireEvent.click(screen.getByText('Rediger menstruationsdatoer'));
+    fireEvent.click(screen.getByLabelText(`${longDate(TODAY)}: menstruation`));
+    await waitFor(() => expect(toggle).toHaveBeenCalledWith(TODAY));
+    fireEvent.click(screen.getByText('Færdig'));
+    fireEvent.click(screen.getByRole('tab', { name: 'År' }));
+    expect(await screen.findByLabelText(monthTitle(TODAY.slice(0, 7)))).toBeInTheDocument();
   });
 
   it('logs a day', async () => {

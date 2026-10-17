@@ -5,6 +5,27 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.1 - Start here
+
+`predict.day_map` replaces the bare kinds: per day `kind` (now also
+`possible` - `uncertainty()` days either side of a coming period, from the
+spread of her cycles, growing one day per cycle ahead), `cycleDay`, `phase`,
+`chance` (lav/middel/høj around ovulation). `day_kinds` wraps it.
+`predict.toggle_day` rebuilds her periods from the bled days with one day
+flipped (calendar edit mode, `POST /api/cyklus/period/toggle`).
+`cyklus.forecast_for(phase, pattern, use_diary)` = the mood/behaviour
+forecast (`PROFILES` per phase, nudged by her top logged items; Dagbog
+mood/overskud only for her own view). `GET /api/cyklus/dayinfo` explains one
+of her days. Viewers: `GET /api/cyklus/shared/calendar|day?owner=` through
+`_share_settings` (must be shared + female), a window of 21 days back to 120
+ahead, fertile kinds/phase hidden and no `chance` without `share_fertile`,
+no log/note/Dagbog. Frontend: `ScrollStrip` (weeks as snap columns, scrolls
+to the selected day's week, keeps it on resize), `SharedDays`,
+`ForecastCard`, `CyklusCalendar` (Måned/År, `DaySheet`, edit mode).
+Also fixed a race in LedgerView's Ask (first askState overwrote a new ask).
+
+---
+
 ## 0.3.0 - Start here
 
 **Gender**: core migration 2 adds `users.gender` ('' | female | male);

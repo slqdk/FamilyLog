@@ -366,10 +366,18 @@ with sync_playwright() as p:
     fp.goto(BASE + "/#/cyklus")
     fp.wait_for_selector(".cy-hero", timeout=15000)
     check("Cyklus starts empty", "Velkommen" in fp.locator(".cy-big").inner_text())
-    fp.get_by_role("button", name="En anden dag…").click()
-    fp.locator(".cy-otherday input[type=date]").fill((today - _dt.timedelta(days=30)).isoformat())
-    fp.locator(".cy-otherday button").click()
-    wait_until(fp, lambda: "Menstruation" in fp.locator(".cy-big").inner_text() or "forsinket" in fp.locator(".cy-big").inner_text())
+    # 0.3.1: the strip swipes over weeks; tap the day it started, then "startede denne dag".
+    first = today - _dt.timedelta(days=today.weekday()) - _dt.timedelta(days=42)
+    days_btn = fp.locator(".cy-strip-scroll .cy-strip-day")
+    check("the week strip holds weeks before and after", days_btn.count() == 15 * 7, str(days_btn.count()))
+    days_btn.nth((today - _dt.timedelta(days=30) - first).days).click()
+    fp.get_by_role("button", name="Menstruationen startede denne dag").click()
+    wait_until(fp, lambda: fp.locator(".cy-big").inner_text().startswith("Menstruationsdag"))
+    fp.get_by_role("button", name="Tilbage til i dag").click()
+    wait_until(fp, lambda: fp.locator(".cy-forecast h3", has_text="i dag").count() == 1
+               and fp.locator(".cy-cards").count() == 1)
+    check("today is explained with a mood and behaviour forecast",
+          fp.locator(".cy-forecast .cy-bars li").count() >= 4 and "Chance for graviditet" in fp.locator(".cy-cards").inner_text())
     fp.get_by_role("button", name="Menstruationen startede i dag").click()
     wait_until(fp, lambda: fp.locator(".cy-big").inner_text() == "Menstruationsdag 1")
     check("a period started today: Menstruationsdag 1", fp.locator(".cy-big").inner_text() == "Menstruationsdag 1",
@@ -378,6 +386,9 @@ with sync_playwright() as p:
     check("her cycles: 30 days measured", "30" in fp.locator(".cy-avgs").inner_text())
     sw = fp.evaluate("document.documentElement.scrollWidth")
     check("Cyklus fits the phone", sw <= 390, f"scrollWidth {sw}")
+    pos = fp.evaluate("(() => { const e = document.querySelector('.cy-strip-scroll'); return [e.scrollLeft, e.clientWidth]; })()")
+    check("the strip opens on this week", pos[0] == 6 * pos[1], str(pos))
+    fp.screenshot(path=f"{OUT}/16a-cyklus-viewport.png")
     fp.screenshot(path=f"{OUT}/16-cyklus.png", full_page=True)
     fp.locator(".cy-actions a", has_text="Log i dag").click()
     fp.wait_for_selector(".cy-chips button")
@@ -391,9 +402,31 @@ with sync_playwright() as p:
     fp.screenshot(path=f"{OUT}/17-cyklus-day.png", full_page=True)
     fp.goto(BASE + "/#/cyklus/kalender")
     fp.wait_for_selector(".cy-cal-grid .cy-period", timeout=10000)
-    check("the calendar shows logged and predicted periods",
-          fp.locator(".cy-cal-grid .cy-period").count() >= 1)
-    fp.screenshot(path=f"{OUT}/18-cyklus-calendar.png", full_page=True)
+    check("the calendar shows logged, predicted and possible periods",
+          fp.locator(".cy-cal-grid .cy-period").count() >= 5 and fp.locator(".cy-cal-grid .cy-predicted").count() >= 1
+          and fp.locator(".cy-cal-grid .cy-possible").count() >= 1)
+    fp.screenshot(path=f"{OUT}/18-cyklus-calendar.png")
+    later = today + _dt.timedelta(days=12)
+    fp.locator(f".cy-month[data-month='{later.isoformat()[:7]}'] .cy-cal-day").nth(later.day - 1).click()
+    fp.wait_for_selector(".cy-sheet .cy-sheet-title")
+    check("a day in the calendar opens its explanation", "Cyklusdag" in fp.locator(".cy-sheet").inner_text(),
+          fp.locator(".cy-sheet").inner_text()[:120])
+    fp.screenshot(path=f"{OUT}/18b-cyklus-day-sheet.png")
+    fp.get_by_role("button", name="Luk").click()
+    n_before = fp.locator(".cy-cal-grid .cy-period").count()
+    fp.get_by_role("button", name="Rediger menstruationsdatoer").click()
+    d29 = today - _dt.timedelta(days=25)                      # one day longer than the 5 logged
+    fp.locator(f".cy-month[data-month='{d29.isoformat()[:7]}'] .cy-cal-day").nth(d29.day - 1).click()
+    wait_until(fp, lambda: fp.locator(".cy-cal-grid .cy-period").count() == n_before + 1)
+    check("editing period dates adds a day with one tap", fp.locator(".cy-cal-grid .cy-period").count() == n_before + 1)
+    fp.screenshot(path=f"{OUT}/18c-cyklus-edit.png")
+    fp.get_by_role("button", name="Færdig").click()
+    fp.get_by_role("tab", name="År").click()
+    fp.wait_for_selector(".cy-year-grid")
+    check("the year view shows twelve months", fp.locator(".cy-mini").count() == 12)
+    sw = fp.evaluate("document.documentElement.scrollWidth")
+    check("the calendar fits the phone", sw <= 390, f"scrollWidth {sw}")
+    fp.screenshot(path=f"{OUT}/18d-cyklus-year.png", full_page=True)
     # Nobody sees anything before she shares - the admin included.
     check("before sharing the admin sees no cycle",
           ph.request.get(BASE + "/api/cyklus/state").json()["shared"] == [])
@@ -412,6 +445,16 @@ with sync_playwright() as p:
     shared = ph.locator(".cy-shared").inner_text()
     check("the shared card shows her status only", "Menstruationsdag 1" in shared and "Frugtbare" not in shared
           and "Kramper" not in shared, shared[:200])
+    check("the shared card has today's mood and behaviour forecast", ph.locator(".cy-forecast .cy-bars li").count() == 4)
+    # 0.3.1: he can swipe ahead and tap a day for its prediction and mood forecast.
+    ph.locator(".cy-shared .cy-strip-day").nth(14 + today.weekday() + 5).click()
+    ph.wait_for_selector(".cy-shared-day .cy-shared-line")
+    wait_until(ph, lambda: "Cyklusdag" in ph.locator(".cy-shared-day").inner_text())
+    check("a coming day explained to him, with its mood forecast",
+          "Forudsigelse" in ph.locator(".cy-shared-day").inner_text()
+          and ph.locator(".cy-shared .cy-forecast .cy-bars li").count() == 4
+          and "chance" not in ph.locator(".cy-shared").inner_text(), ph.locator(".cy-shared-day").inner_text()[:120])
+    ph.screenshot(path=f"{OUT}/20b-cyklus-shared-day.png", full_page=True)
     check("her note is nowhere on the admin's page", "Hemmelig cyklusnote" not in ph.content())
     check("the admin cannot log a cycle (not set to female)", ph.locator(".cy-hero").count() == 0)
     ph.screenshot(path=f"{OUT}/20-cyklus-shared.png", full_page=True)

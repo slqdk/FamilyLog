@@ -2,6 +2,31 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.1 - 2026-10-17
+
+Cyklus, after the first look next to Flo.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **The week strip swipes** - six weeks back, eight ahead - and **tapping a
+  day explains it**: what it is ("Menstruation ventes", "Frugtbar dag",
+  "PMS-dag", ...), the chance of pregnancy, the symptoms to expect, when
+  the next period comes, and **the mood and behaviour to expect** (energy,
+  mood, overskud, social, patience - typical for the phase, moved by her
+  own logs and Dagbog). Today leads with what is next, like "Frugtbare
+  dage om 4 dage".
+- **A full calendar**: Måned (months to scroll, with "I dag") and År (the
+  whole year at a glance). A coming period shows its likely days and the
+  days it may come early or late (wider when her cycles vary more). Tap a
+  day for its explanation; **Rediger menstruationsdatoer** marks or
+  unmarks the days she bled, one tap per day.
+- **Those she shares with see the prediction and the mood forecast too**:
+  today's on the card, and any day ahead by swiping and tapping - by the
+  same rules as before (fertile days and the chance only if she shares
+  them; never her note or Dagbog scores).
+- Fixed: the admin app's Økonomi question could stop updating when the
+  page's first reply came back after the question was sent.
+
 ## 0.3.0 - 2026-10-17
 
 Økonomi for the family, on the phone, and Cyklus.

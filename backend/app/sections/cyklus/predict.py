@@ -165,54 +165,126 @@ def status(periods: list[Period], today: date, cycle_setting: int | None = None,
     return out
 
 
-def day_kinds(periods: list[Period], frm: date, to: date, today: date,
-              cycle_setting: int | None = None, period_setting: int | None = None,
-              flow_days: set[date] | None = None) -> dict[date, str]:
-    """A mark per day for the calendar and the week strip: 'period' (logged),
-    'predicted' (a coming period), 'fertile', 'ovulation', 'pms' or ''.
-    Past days follow the log; days from today on follow the prediction."""
+def uncertainty(avg: dict) -> int:
+    """How many days either side a coming period may land: from how much
+    her cycles vary (2 until there are three to measure), 1-4 days."""
+    h = avg.get("history") or []
+    if len(h) >= 3:
+        return max(1, min(4, round(statistics.pstdev(h[-HISTORY:]))))
+    return 2
+
+
+def chance(cd: int, cycle: int, period: int, bleeding: bool = False) -> str:
+    """Chance of pregnancy that day by the calendar: 'høj' the two days
+    before ovulation and the day itself, 'middel' the rest of the fertile
+    window, else 'lav'. An estimate - never contraception."""
+    if bleeding:
+        return "lav"
+    diff = cd - ovulation_day(cycle, period)
+    if -2 <= diff <= 0:
+        return "høj"
+    if -5 <= diff <= 1:
+        return "middel"
+    return "lav"
+
+
+_MARK = {"menstruation": "predicted", "fertile": "fertile", "ovulation": "ovulation", "pms": "pms"}
+
+
+def day_map(periods: list[Period], frm: date, to: date, today: date,
+            cycle_setting: int | None = None, period_setting: int | None = None,
+            flow_days: set[date] | None = None) -> dict[date, dict]:
+    """Everything the calendar knows per day: `kind` - 'period' (logged),
+    'predicted' (a coming period's likely days), 'possible' (it may start or
+    run this early or late), 'fertile', 'ovulation', 'pms' or '' - plus the
+    cycle day, the phase and the chance of pregnancy. Past days follow the
+    log; days from today on follow the prediction."""
     avg = averages(periods, cycle_setting, period_setting)
     L, P = avg["cycle"], avg["period"]
+    unc = uncertainty(avg)
     bled = period_days(periods, P, today, flow_days)
     started = sorted((p for p in periods if p.start <= today), key=lambda p: p.start)
     starts = [p.start for p in started]
     last_end = started[-1].end if started else None
     st = status(periods, today, cycle_setting, period_setting, flow_days)
-    out: dict[date, str] = {}
+    stale = bool(st.get("stale"))
+    out: dict[date, dict] = {}
     d = frm
     while d <= to:
-        kind = ""
+        info = {"kind": "", "cycleDay": None, "phase": None, "chance": None}
+        prev = [s for s in starts if s <= d]
         if d in bled:
-            kind = "period"
-        elif starts and d >= starts[0]:
-            if d <= today:
-                prev = max(s for s in starts if s <= d)
-                nxt = [s for s in starts if s > d]
-                length = (nxt[0] - prev).days if nxt and MIN_CYCLE <= (nxt[0] - prev).days <= MAX_CYCLE else L
-                ph = phase_of((d - prev).days + 1, length, P, bleeding=False)
+            cd = (d - prev[-1]).days + 1 if prev else 1
+            info.update(kind="period", cycleDay=cd, phase="menstruation", chance="lav")
+        elif prev and d <= today:
+            p0 = prev[-1]
+            nxt = [s for s in starts if s > d]
+            length = (nxt[0] - p0).days if nxt and MIN_CYCLE <= (nxt[0] - p0).days <= MAX_CYCLE else L
+            cd = (d - p0).days + 1
+            if cd <= MAX_CYCLE and not (stale and not nxt):
+                ph = phase_of(cd, length, P, bleeding=False)
                 kind = {"fertile": "fertile", "ovulation": "ovulation"}.get(ph, "")
-                if d == today and ph == "pms" and not st.get("stale"):
+                if d == today and ph == "pms":
                     kind = "pms"
-            elif st.get("stale"):
-                kind = ""
+                info.update(kind=kind, cycleDay=cd, phase=ph, chance=chance(cd, length, P))
+        elif prev and d > today and not stale:
+            anchor = date.fromisoformat(st["nextStart"])
+            last_start = date.fromisoformat(st["lastStart"])
+            if d < anchor:
+                # The rest of a period still going is expected too; not
+                # once she has said it ended.
+                ended = last_end is not None and d > last_end
+                cd = (d - last_start).days + 1
+                ph = "pms" if st.get("late") else phase_of(cd, L, P, bleeding=False if ended else None)
+                kind = _MARK.get(ph, "")
+                if not st.get("late") and (anchor - d).days <= unc and kind != "predicted":
+                    kind = "possible"
+                info.update(kind=kind, cycleDay=cd, phase=ph,
+                            chance=chance(cd, L, P, bleeding=ph == "menstruation"))
             else:
-                anchor = date.fromisoformat(st["nextStart"])
-                if d < anchor:
-                    # The rest of a period still going is expected too; not
-                    # once she has said it ended.
-                    ended = last_end is not None and d > last_end
-                    ph = phase_of((d - date.fromisoformat(st["lastStart"])).days + 1, L, P,
-                                  bleeding=False if ended else None)
-                    if st.get("late"):
-                        ph = "pms"
-                else:
-                    k = (d - anchor).days // L
-                    cd = (d - (anchor + timedelta(days=k * L))).days + 1
-                    ph = phase_of(cd, L, P)
-                kind = {"menstruation": "predicted", "fertile": "fertile", "ovulation": "ovulation",
-                        "pms": "pms"}.get(ph, "")
-        out[d] = kind
+                k = (d - anchor).days // L
+                cd = (d - (anchor + timedelta(days=k * L))).days + 1
+                ph = phase_of(cd, L, P)
+                kind = _MARK.get(ph, "")
+                u_after, u_before = min(7, unc + k), min(7, unc + k + 1)
+                if kind != "predicted" and (P < cd <= P + u_after or cd > L - u_before):
+                    kind = "possible"
+                info.update(kind=kind, cycleDay=cd, phase=ph,
+                            chance=chance(cd, L, P, bleeding=ph == "menstruation"))
+        out[d] = info
         d += timedelta(days=1)
+    return out
+
+
+def day_kinds(periods: list[Period], frm: date, to: date, today: date,
+              cycle_setting: int | None = None, period_setting: int | None = None,
+              flow_days: set[date] | None = None) -> dict[date, str]:
+    """Just the mark per day (see day_map)."""
+    return {d: v["kind"] for d, v in day_map(periods, frm, to, today, cycle_setting,
+                                              period_setting, flow_days).items()}
+
+
+def toggle_day(periods: list[Period], day: date, today: date, period_len: int,
+               flow_days: set[date] | None = None) -> list[Period]:
+    """Her periods with one day switched in or out (the calendar's "edit
+    period dates", one tap per day). The days she bled are rebuilt into
+    runs; a run that still holds an un-ended period's start and reaches
+    today stays un-ended."""
+    bled = period_days(periods, period_len, today, flow_days)
+    bled ^= {day}
+    open_starts = {p.start for p in periods if p.end is None}
+    runs: list[Period] = []
+    for d in sorted(bled):
+        if runs and d == (runs[-1].end or runs[-1].start) + timedelta(days=1):
+            runs[-1] = Period(runs[-1].start, d)
+        else:
+            runs.append(Period(d, d))
+    out = []
+    for r in runs:
+        if r.end == today and any(r.start <= s <= r.end for s in open_starts):
+            out.append(Period(r.start, None))
+        else:
+            out.append(r)
     return out
 
 

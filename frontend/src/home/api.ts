@@ -77,7 +77,7 @@ export interface OkMonth {
 }
 
 // ---- Cyklus (0.3.0) ----
-export type DayKind = '' | 'period' | 'predicted' | 'fertile' | 'ovulation' | 'pms';
+export type DayKind = '' | 'period' | 'predicted' | 'possible' | 'fertile' | 'ovulation' | 'pms';
 export type Phase = 'menstruation' | 'follicular' | 'fertile' | 'ovulation' | 'luteal' | 'pms' | 'mid';
 export interface CyStatus {
   empty: boolean; today: string; stale?: boolean;
@@ -106,7 +106,20 @@ export interface CyShared {
   fertileFrom?: string; fertileTo?: string; ovulation?: string; fertileToday?: boolean;
   week?: { day: string; kind: DayKind }[];
   todayLog?: { flow: string; symptoms: string[]; moods: string[] }; pattern?: CyPattern | null;
+  forecast?: CyForecast;
 }
+export interface CyForecast {
+  items: { key: string; label: string; value: number; source: 'typisk' | 'dig' | 'dagbog' }[];
+  expect: string[]; expectSource: 'typisk' | 'dig'; behaviour: string;
+}
+export interface CyDayInfo {
+  day: string; past: boolean; isToday: boolean; kind: DayKind; cycleDay: number | null; phase: Phase | null;
+  title: string; sub?: string; phaseLabel?: string; text: string; chance?: 'lav' | 'middel' | 'høj' | null;
+  chanceLabel?: string; nextPeriodIn?: number | null; forecast?: CyForecast; log: CyDay | null;
+}
+/** A day as she shares it: no log, no note; chance only with the fertile days. */
+export type CySharedDay = Omit<CyDayInfo, 'past' | 'log'>;
+export interface CyCalDay { day: string; kind: DayKind; cycleDay: number | null; flow: string; logged: boolean }
 export interface CyOptions { flows: { key: string; label: string }[]; symptoms: string[]; moods: string[];
   disclaimer: string; phases: Record<string, string> }
 export interface CyState { enabled: boolean; shared: CyShared[]; options: CyOptions; own?: CyOwn }
@@ -153,7 +166,13 @@ export const homeApi = {
 
   cyState: () => fetch('/api/cyklus/state').then(json<CyState>),
   cyCalendar: (frm: string, to: string) =>
-    fetch(`/api/cyklus/calendar?frm=${frm}&to=${to}`).then(json<{ days: { day: string; kind: DayKind; flow: string; logged: boolean }[] }>),
+    fetch(`/api/cyklus/calendar?frm=${frm}&to=${to}`).then(json<{ days: CyCalDay[] }>),
+  cySharedCalendar: (owner: number, frm: string, to: string) =>
+    fetch(`/api/cyklus/shared/calendar?owner=${owner}&frm=${frm}&to=${to}`).then(json<{ days: { day: string; kind: DayKind }[] }>),
+  cySharedDay: (owner: number, day: string) =>
+    fetch(`/api/cyklus/shared/day?owner=${owner}&day=${day}`).then(json<CySharedDay>),
+  cyDayInfo: (day: string) => fetch(`/api/cyklus/dayinfo?day=${day}`).then(json<CyDayInfo>),
+  cyToggle: (day: string) => fetch('/api/cyklus/period/toggle', send('POST', { day })).then(json<CyOwn>),
   cyDay: (day: string) => fetch(`/api/cyklus/day?day=${day}`).then(json<{ day: CyDay }>),
   cySaveDay: (d: Omit<CyDay, 'note'> & { note?: string }) => fetch('/api/cyklus/day', send('PUT', d)).then(json<CyOwn>),
   cyStart: (day: string) => fetch('/api/cyklus/period/start', send('POST', { day })).then(json<CyOwn>),

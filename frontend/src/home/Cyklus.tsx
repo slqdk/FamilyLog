@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  homeApi, type CyDay, type CyOptions, type CyOwn, type CyShared, type CyState, type DayKind, type Phase,
+  homeApi, type CyCalDay, type CyDay, type CyDayInfo, type CyForecast, type CyOptions, type CyOwn, type CyShared,
+  type CySharedDay, type CyState, type DayKind, type Phase,
 } from './api';
 import {
-  addDays, addMonths, dayOfMonth, dayTitle, monthGrid, monthTitle, routeHash, shortDate,
+  addDays, addMonths, dayOfMonth, daysBetween, dayTitle, longDate, monthGrid, monthTitle, routeHash, shortDate,
   todayLocal, weekStart, weekdayLetter,
 } from './logic';
 
@@ -46,34 +47,72 @@ function useCy() {
   return { st, error, setError, setOwn, load };
 }
 
-// ---- the strip of days ------------------------------------------------------------------------
+// ---- the strip of days: swipe week by week, tap a day -----------------------------------------
 
-function Strip({ list, today, link }: { list: { day: string; kind: DayKind }[]; today: string; link?: boolean }) {
+const KIND_LABEL: Record<DayKind, string> = {
+  '': '', period: 'menstruation', predicted: 'forventet menstruation', possible: 'mulig menstruation',
+  fertile: 'frugtbar', ovulation: 'ægløsning', pms: 'PMS',
+};
+
+const WEEKS_BACK = 6;
+const WEEKS_AHEAD = 8;
+
+function dotClass(kind: DayKind | undefined, day: string, today: string, selected?: string) {
+  return `cy-dot cy-${kind || 'none'}${day === today ? ' cy-today' : ''}${selected === day ? ' cy-sel' : ''}`;
+}
+
+/** Weeks side by side; the page opens on this week and swipes either way. */
+function ScrollStrip({ marks, today, selected, onPick, back = WEEKS_BACK, ahead = WEEKS_AHEAD }: {
+  marks: Map<string, DayKind>; today: string; selected: string; onPick: (day: string) => void;
+  back?: number; ahead?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const first = addDays(weekStart(today), -7 * back);
+  const weeks = Array.from({ length: back + ahead + 1 }, (_, w) => addDays(first, 7 * w));
+  // Show the week of the chosen day - on opening, and when "back to today"
+  // (or a tap elsewhere) picks a day in another week.
+  const week = Math.max(0, Math.min(weeks.length - 1, Math.floor(daysBetween(first, selected) / 7)));
+  const shown = useRef(week);
+  useEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollLeft = el.clientWidth * week;      // instant: a smooth scroll can be cut short
+    shown.current = week;
+  }, [week]);
+  // Keep the week in view when the width changes (turning the phone).
+  useEffect(() => {
+    const on = () => { const el = ref.current; if (el) el.scrollLeft = el.clientWidth * shown.current; };
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
   return (
-    <div className="cy-strip">
-      {list.map(({ day, kind }) => {
-        const cls = `cy-dot cy-${kind || 'none'}${day === today ? ' cy-today' : ''}`;
-        const inner = <><span className="cy-wd">{weekdayLetter(day)}</span><span className={cls}>{dayOfMonth(day)}</span></>;
-        return link && day <= today
-          ? <a key={day} className="cy-strip-day" href={routeHash({ name: 'cyklusDay', day })}
-               aria-label={`${dayTitle(day, today)}${kind ? `: ${KIND_LABEL[kind]}` : ''}`}>{inner}</a>
-          : <span key={day} className="cy-strip-day" aria-label={`${dayTitle(day, today)}${kind ? `: ${KIND_LABEL[kind]}` : ''}`}>{inner}</span>;
-      })}
+    <div className="cy-strip-scroll" ref={ref} aria-label="Uger - stryg til siden"
+         onScroll={(e) => { const el = e.currentTarget; if (el.clientWidth) shown.current = Math.round(el.scrollLeft / el.clientWidth); }}>
+      {weeks.map((w) => (
+        <div key={w} className="cy-strip">
+          {Array.from({ length: 7 }, (_, i) => addDays(w, i)).map((day) => {
+            const kind = marks.get(day) ?? '';
+            return (
+              <button key={day} className="cy-strip-day" onClick={() => onPick(day)} aria-pressed={selected === day}
+                      aria-label={`${dayTitle(day, today)}${kind ? `: ${KIND_LABEL[kind]}` : ''}`}>
+                <span className={`cy-wd${day === today ? ' cy-wd-today' : ''}`}>{day === today ? 'I DAG' : weekdayLetter(day)}</span>
+                <span className={dotClass(kind, day, today, selected)}>{dayOfMonth(day)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
 
-const KIND_LABEL: Record<DayKind, string> = {
-  '': '', period: 'menstruation', predicted: 'forventet menstruation', fertile: 'frugtbar',
-  ovulation: 'ægløsning', pms: 'PMS',
-};
-
-function Legend({ fertile = true }: { fertile?: boolean }) {
+function Legend() {
   return (
     <p className="cy-legend">
       <span><i className="cy-dot cy-period" />Menstruation</span>
       <span><i className="cy-dot cy-predicted" />Forventet</span>
-      {fertile && <span><i className="cy-dot cy-fertile" />Frugtbar</span>}
+      <span><i className="cy-dot cy-possible" />Mulig</span>
+      <span><i className="cy-dot cy-fertile" />Frugtbar</span>
+      <span><i className="cy-dot cy-ovulation" />Ægløsning</span>
       <span><i className="cy-dot cy-pms" />PMS</span>
     </p>
   );
@@ -85,6 +124,7 @@ export function CyklusPage() {
   const { st, error, setError, setOwn, load } = useCy();
   const [busy, setBusy] = useState(false);
   const today = todayLocal();
+  const [selected, setSelected] = useState(today);
 
   async function act(fn: () => Promise<CyOwn>) {
     setBusy(true); setError(null);
@@ -93,12 +133,13 @@ export function CyklusPage() {
 
   return (
     <div className="cy-page">
-      <CyBar title="Cyklus" right={st?.enabled
+      <CyBar title={st?.enabled ? (selected === today ? 'I dag' : longDate(selected)) : 'Cyklus'} right={st?.enabled
         ? <a className="cy-round" aria-label="Kalender" href={routeHash({ name: 'cyklusCal', month: null })}><CalIcon /></a>
         : undefined} />
       {!st && !error && <p className="cy-note">Henter…</p>}
       {error && <p className="cy-error" role="alert">{error}</p>}
-      {st?.enabled && st.own && <Own own={st.own} options={st.options} today={today} busy={busy} act={act} reload={load} />}
+      {st?.enabled && st.own && <Own own={st.own} options={st.options} today={today} busy={busy} act={act}
+                                     reload={load} selected={selected} setSelected={setSelected} />}
       {st && st.shared.length > 0 && (
         <section aria-label="Delt med dig">
           <h2 className="cy-h2">Delt med dig</h2>
@@ -114,66 +155,79 @@ export function CyklusPage() {
   );
 }
 
-function Own({ own, options, today, busy, act, reload }: {
+function Own({ own, options, today, busy, act, reload, selected, setSelected }: {
   own: CyOwn; options: CyOptions; today: string; busy: boolean;
   act: (fn: () => Promise<CyOwn>) => Promise<void>; reload: () => void;
+  selected: string; setSelected: (d: string) => void;
 }) {
   const s = own.status;
-  const [week, setWeek] = useState<{ day: string; kind: DayKind }[]>([]);
-  const [otherDay, setOtherDay] = useState(false);
-  const [pick, setPick] = useState(today);
-  const mon = weekStart(today);
+  const [marks, setMarks] = useState<Map<string, DayKind>>(new Map());
+  const [info, setInfo] = useState<CyDayInfo | null>(null);
+  const first = addDays(weekStart(today), -7 * WEEKS_BACK);
+  const last = addDays(weekStart(today), 7 * WEEKS_AHEAD + 6);
+  const version = `${s.lastStart}|${s.inPeriod}|${s.lastOpen}|${own.periods.map((p) => `${p.start}-${p.end}`).join(',')}`;
   useEffect(() => {
-    homeApi.cyCalendar(mon, addDays(mon, 6)).then((r) => setWeek(r.days)).catch(() => setWeek([]));
-  }, [mon, s.lastStart, s.inPeriod, s.lastOpen, own.periods.length]);
+    homeApi.cyCalendar(first, last).then((r) => setMarks(new Map(r.days.map((d) => [d.day, d.kind])))).catch(() => setMarks(new Map()));
+  }, [first, last, version]);
+  useEffect(() => {
+    setInfo(null);
+    homeApi.cyDayInfo(selected).then(setInfo).catch(() => setInfo(null));
+  }, [selected, version, own.today]);
 
-  let big: string; let small = '';
-  if (s.empty) { big = 'Velkommen'; small = 'Log starten på din seneste menstruation, så regner Cyklus resten ud.'; }
-  else if (s.stale) { big = 'Log din seneste menstruation'; small = `Den sidste, der er logget, startede ${shortDate(s.lastStart!)} ${s.lastStart!.slice(0, 4)}.`; }
-  else if (s.inPeriod) { big = `Menstruationsdag ${s.periodDay}`; small = `Cyklusdag ${s.cycleDay}`; }
-  else if (s.late) { big = `${days(s.late)} forsinket`; small = `Menstruationen ventedes ${shortDate(addDays(today, -s.late))} · cyklusdag ${s.cycleDay}`; }
-  else if (s.daysUntilNext === 0) { big = 'Menstruation i dag'; small = `Forventet · cyklusdag ${s.cycleDay}`; }
-  else { big = `Menstruation om ${days(s.daysUntilNext ?? 0)}`; small = `Cyklusdag ${s.cycleDay} · ${s.phaseLabel}`; }
-  const phase = s.phase;
-  const pattern = phase ? own.patterns[phase === 'ovulation' ? 'fertile' : phase] : undefined;
+  const isToday = selected === today;
+  let kicker = ''; let big: string; let small = '';
+  if (isToday) {
+    if (s.empty) { big = 'Velkommen'; small = 'Tryk på dagen, din seneste menstruation startede, og så "Menstruationen startede".'; }
+    else if (s.stale) { big = 'Log din seneste menstruation'; small = `Den sidste, der er logget, startede ${shortDate(s.lastStart!)} ${s.lastStart!.slice(0, 4)}.`; }
+    else if (s.inPeriod) { big = `Menstruationsdag ${s.periodDay}`; small = `Cyklusdag ${s.cycleDay}`; }
+    else if (s.late) { big = `${days(s.late)} forsinket`; small = `Menstruationen ventedes ${shortDate(addDays(today, -s.late))} · cyklusdag ${s.cycleDay}`; }
+    else if (s.daysUntilNext === 0) { kicker = 'Forudsigelse'; big = 'Menstruation i dag'; small = `Cyklusdag ${s.cycleDay}`; }
+    else if (s.fertileToday) { kicker = 'Forudsigelse'; big = 'Frugtbar dag'; small = `Menstruation om ${days(s.daysUntilNext ?? 0)} · cyklusdag ${s.cycleDay}`; }
+    else if ((s.daysUntilFertile ?? 0) > 0 && s.fertileFrom! < s.nextStart!) {
+      kicker = 'Forudsigelse'; big = `Frugtbare dage om ${days(s.daysUntilFertile!)}`;
+      small = `Menstruation om ${days(s.daysUntilNext ?? 0)} · cyklusdag ${s.cycleDay}`;
+    } else { kicker = 'Forudsigelse'; big = `Menstruation om ${days(s.daysUntilNext ?? 0)}`; small = `Cyklusdag ${s.cycleDay} · ${s.phaseLabel}`; }
+  } else {
+    kicker = selected > today ? `Forudsigelse · ${dayTitle(selected, today)}` : dayTitle(selected, today);
+    big = info?.title ?? '…';
+    small = info?.sub ?? '';
+  }
+  const selKind = marks.get(selected) ?? '';
+  const canLog = selected <= today;
+  const word = isToday ? 'i dag' : 'denne dag';
+  const lastPeriod = own.periods[0];
+  const endsOpen = !!lastPeriod && !lastPeriod.end && selected >= lastPeriod.start && selKind === 'period';
+  const ins = info && info.phase ? info : null;
 
   return (
     <>
-      <Strip list={week} today={today} link />
-      <section className="cy-hero" aria-label="I dag">
+      <ScrollStrip marks={marks} today={today} selected={selected} onPick={setSelected} />
+      <section className="cy-hero" aria-label="Dagen">
+        {kicker && <p className="cy-kicker">{kicker}</p>}
         <h1 className="cy-big">{big}</h1>
-        <p className="cy-small">{small}</p>
-        {s.phaseText && <p className="cy-phase-text">{s.phaseText}</p>}
-        {s.askEnded && (
+        {small && <p className="cy-small">{small}</p>}
+        {isToday && s.phaseText && <p className="cy-phase-text">{s.phaseText}</p>}
+        {isToday && s.askEnded && (
           <div className="cy-ask-ended">
             <span>Er din menstruation slut?</span>
             <button className="cy-pill cy-pill-soft" disabled={busy}
-                    onClick={() => act(() => homeApi.cyEnd(addDays(s.lastStart!, own.status.averages.period - 1) < today
-                      ? addDays(s.lastStart!, own.status.averages.period - 1) : today))}>Ja</button>
+                    onClick={() => act(() => homeApi.cyEnd(addDays(s.lastStart!, s.averages.period - 1) < today
+                      ? addDays(s.lastStart!, s.averages.period - 1) : today))}>Ja</button>
           </div>
         )}
         <div className="cy-hero-actions">
-          {s.inPeriod
-            ? <button className="cy-pill" disabled={busy} onClick={() => act(() => homeApi.cyEnd(today))}>Menstruationen sluttede i dag</button>
-            : <button className="cy-pill" disabled={busy} onClick={() => act(() => homeApi.cyStart(today))}>Menstruationen startede i dag</button>}
-          {!otherDay
-            ? <button className="cy-link" onClick={() => setOtherDay(true)}>En anden dag…</button>
-            : (
-              <span className="cy-otherday">
-                <input type="date" value={pick} max={today} aria-label="Dato" onChange={(e) => setPick(e.target.value)} />
-                <button className="cy-pill cy-pill-soft" disabled={busy || !pick}
-                        onClick={() => act(() => s.inPeriod ? homeApi.cyEnd(pick) : homeApi.cyStart(pick)).then(() => setOtherDay(false))}>
-                  {s.inPeriod ? 'Sluttede' : 'Startede'}</button>
-              </span>
-            )}
+          {canLog && (endsOpen
+            ? <button className="cy-pill" disabled={busy} onClick={() => act(() => homeApi.cyEnd(selected))}>Menstruationen sluttede {word}</button>
+            : selKind !== 'period' && <button className="cy-pill" disabled={busy} onClick={() => act(() => homeApi.cyStart(selected))}>Menstruationen startede {word}</button>)}
+          {!isToday && <button className="cy-link" onClick={() => setSelected(today)}>Tilbage til i dag</button>}
         </div>
       </section>
 
       <nav className="cy-actions" aria-label="Genveje">
-        <a href={routeHash({ name: 'cyklusDay', day: today })}>
+        <a href={routeHash({ name: 'cyklusDay', day: canLog ? selected : today })}>
           <span className="cy-act cy-act-main" aria-hidden>
             <svg viewBox="0 0 24 24" width="26" height="26"><path d="M4 20h4L19 9l-4-4L4 16z M13.5 6.5l4 4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" /></svg>
-          </span>Log i dag</a>
+          </span>{canLog && !isToday ? 'Log dagen' : 'Log i dag'}</a>
         <a href={routeHash({ name: 'cyklusCal', month: null })}><span className="cy-act" aria-hidden><CalIcon /></span>Kalender</a>
         <a href={routeHash({ name: 'cyklusShare' })}>
           <span className="cy-act" aria-hidden>
@@ -181,48 +235,49 @@ function Own({ own, options, today, busy, act, reload }: {
           </span>Deling</a>
       </nav>
 
-      {!s.empty && !s.stale && (
+      {ins && (
         <section aria-label="Mine indsigter">
-          <h2 className="cy-h2">Mine indsigter · {shortDate(today)}</h2>
+          <h2 className="cy-h2">Mine indsigter · {isToday ? 'i dag' : shortDate(selected)}</h2>
           <div className="cy-cards">
-            <div className={`cy-insight cy-ph-${phase}`}>
-              <span className="cy-insight-title">{s.phaseLabel}</span>
-              <span className="cy-insight-big">{s.cycleDay}</span>
+            <div className={`cy-insight cy-ph-${ins.phase}`}>
+              <span className="cy-insight-title">{ins.phaseLabel}</span>
+              <span className="cy-insight-big">{ins.cycleDay}</span>
               <span className="cy-insight-sub">cyklusdag</span>
             </div>
-            <div className="cy-insight cy-ph-next">
-              <span className="cy-insight-title">Næste menstruation</span>
-              <span className="cy-insight-big cy-insight-mid">{shortDate(s.nextStart!)}</span>
-              <span className="cy-insight-sub">{s.inPeriod ? `om ${days(s.daysUntilNext ?? 0)}` : s.late ? 'snart' : s.daysUntilNext === 0 ? 'i dag' : `om ${days(s.daysUntilNext ?? 0)}`}</span>
+            <div className={`cy-insight cy-chance-${ins.chance}`}>
+              <span className="cy-insight-title">Chance for graviditet</span>
+              <span className="cy-insight-big cy-insight-mid">{ins.chanceLabel}</span>
+              <span className="cy-insight-sub">anslået ud fra kalenderen</span>
             </div>
-            <div className="cy-insight cy-ph-fertile">
-              <span className="cy-insight-title">Frugtbare dage</span>
-              <span className="cy-insight-big cy-insight-mid">{s.fertileToday ? 'I dag' : `${shortDate(s.fertileFrom!)}`}</span>
-              <span className="cy-insight-sub">{s.fertileToday ? `til ${shortDate(s.fertileTo!)}` : `til ${shortDate(s.fertileTo!)} · anslået`}</span>
-            </div>
-            {pattern && pattern.top.length > 0 && (
-              <div className="cy-insight cy-ph-pattern">
-                <span className="cy-insight-title">Det plejer du at mærke nu</span>
-                <ul>{pattern.top.map((t) => <li key={t.name}>{t.name}</li>)}</ul>
+            {ins.forecast && (
+              <div className="cy-insight cy-ph-expect">
+                <span className="cy-insight-title">Symptomer at forvente</span>
+                {ins.forecast.expect.length
+                  ? <ul>{ins.forecast.expect.slice(0, 4).map((x) => <li key={x}>{x}</li>)}</ul>
+                  : <span className="cy-insight-sub">Ingen særlige</span>}
+                <span className="cy-insight-sub">{ins.forecast.expectSource === 'dig' ? 'ud fra dine logs' : 'typisk for fasen'}</span>
               </div>
             )}
-            {pattern && pattern.mood != null && (
-              <div className="cy-insight cy-ph-mood">
-                <span className="cy-insight-title">Dit humør i Dagbogen</span>
-                <span className="cy-insight-big">{pattern.mood.toLocaleString('da-DK')}</span>
-                <span className="cy-insight-sub">i snit i {pattern.label.toLowerCase()} (1-5)</span>
+            {ins.nextPeriodIn != null && (
+              <div className="cy-insight cy-ph-next">
+                <span className="cy-insight-title">Næste menstruation</span>
+                <span className="cy-insight-big cy-insight-mid">{ins.nextPeriodIn === 0 ? 'Samme dag' : `om ${days(ins.nextPeriodIn)}`}</span>
+                <span className="cy-insight-sub">{shortDate(addDays(selected, ins.nextPeriodIn))}</span>
               </div>
             )}
           </div>
         </section>
       )}
 
-      {own.today && (own.today.flow || own.today.symptoms.length > 0 || own.today.moods.length > 0) && (
-        <section className="cy-card" aria-label="Logget i dag">
-          <h3 className="cy-h3">Logget i dag</h3>
+      {ins?.forecast && <ForecastCard f={ins.forecast} text={ins.text} title={isToday ? 'Humør og adfærd i dag' : `Humør og adfærd · ${shortDate(selected)}`} />}
+      {info && !info.phase && !s.empty && <section className="cy-card"><p className="cy-dim">{info.text}</p></section>}
+
+      {info?.log && (info.log.flow || info.log.symptoms.length > 0 || info.log.moods.length > 0) && (
+        <section className="cy-card" aria-label="Logget">
+          <h3 className="cy-h3">Logget {isToday ? 'i dag' : shortDate(selected)}</h3>
           <div className="cy-chips cy-chips-ro">
-            {own.today.flow && <span>{options.flows.find((f) => f.key === own.today.flow)?.label}</span>}
-            {[...own.today.symptoms, ...own.today.moods].map((x) => <span key={x}>{x}</span>)}
+            {info.log.flow && <span>{options.flows.find((f) => f.key === info.log!.flow)?.label}</span>}
+            {[...info.log.symptoms, ...info.log.moods].map((x) => <span key={x}>{x}</span>)}
           </div>
         </section>
       )}
@@ -230,6 +285,33 @@ function Own({ own, options, today, busy, act, reload }: {
       <Patterns own={own} />
       <History own={own} today={today} busy={busy} act={act} reload={reload} />
     </>
+  );
+}
+
+const SOURCE: Record<string, string> = { typisk: 'typisk', dig: 'dine logs', dagbog: 'Dagbogen' };
+
+/** The mood and behaviour to expect - bars of five, each saying where it comes from. */
+function ForecastCard({ f, text, title, shared, embedded }: {
+  f: CyForecast; text?: string; title: string; shared?: boolean; embedded?: boolean;
+}) {
+  return (
+    <section className={`${embedded ? 'cy-embedded' : 'cy-card'} cy-forecast`} aria-label={title}>
+      <h3 className="cy-h3">{title}</h3>
+      {text && <p className="cy-day-text">{text}</p>}
+      <ul className="cy-bars">
+        {f.items.map((x) => (
+          <li key={x.key}>
+            <span className="cy-bar-label">{x.label}</span>
+            <span className="cy-bar" role="img" aria-label={`${x.label} ${x.value} af 5`}>
+              {[1, 2, 3, 4, 5].map((i) => <i key={i} className={i <= x.value ? 'on' : ''} />)}
+            </span>
+            <small className={`cy-src cy-src-${x.source}`}>{SOURCE[x.source]}</small>
+          </li>
+        ))}
+      </ul>
+      <p className="cy-behaviour"><b>{shared ? 'Typisk nu: ' : 'Forvent: '}</b>{f.behaviour}</p>
+      {shared && f.expect.length > 0 && <p className="cy-dim">Kan mærke: {f.expect.map((x) => x.toLowerCase()).join(', ')}</p>}
+    </section>
   );
 }
 
@@ -313,24 +395,60 @@ function SharedCard({ c }: { c: CyShared }) {
       : c.daysUntilNext === 0 ? 'Menstruation forventes i dag'
         : `Menstruation om ${days(c.daysUntilNext ?? 0)}`;
   return (
-    <section className={`cy-card cy-shared cy-ph-${c.phase}-soft`} aria-label={c.name}>
-      <div className="cy-shared-head">
-        <h3 className="cy-h3">{c.name}</h3>
-        <span className={`cy-badge cy-ph-${c.phase}`}>{c.phaseLabel}</span>
-      </div>
-      <p className="cy-shared-line">{line}</p>
-      <p className="cy-dim">Cyklusdag {c.cycleDay}</p>
-      <p className="cy-phase-text">{c.phaseText}</p>
-      {c.week && <Strip list={c.week} today={c.today} />}
-      {c.fertileFrom && <p className="cy-dim">Frugtbare dage (anslået): {shortDate(c.fertileFrom)} - {shortDate(c.fertileTo!)}</p>}
-      {c.todayLog && (c.todayLog.symptoms.length + c.todayLog.moods.length > 0) && (
-        <><p className="cy-label">I dag har {c.name} logget</p>
-          <div className="cy-chips cy-chips-ro">{[...c.todayLog.symptoms, ...c.todayLog.moods].map((x) => <span key={x}>{x}</span>)}</div></>
+    <>
+      <section className={`cy-card cy-shared cy-ph-${c.phase}-soft`} aria-label={c.name}>
+        <div className="cy-shared-head">
+          <h3 className="cy-h3">{c.name}</h3>
+          <span className={`cy-badge cy-ph-${c.phase}`}>{c.phaseLabel}</span>
+        </div>
+        <p className="cy-shared-line">{line}</p>
+        <p className="cy-dim">Cyklusdag {c.cycleDay}</p>
+        <p className="cy-phase-text">{c.phaseText}</p>
+        <SharedDays c={c} />
+        {c.fertileFrom && <p className="cy-dim">Frugtbare dage (anslået): {shortDate(c.fertileFrom)} - {shortDate(c.fertileTo!)}</p>}
+        {c.todayLog && (c.todayLog.symptoms.length + c.todayLog.moods.length > 0) && (
+          <><p className="cy-label">I dag har {c.name} logget</p>
+            <div className="cy-chips cy-chips-ro">{[...c.todayLog.symptoms, ...c.todayLog.moods].map((x) => <span key={x}>{x}</span>)}</div></>
+        )}
+      </section>
+    </>
+  );
+}
+
+/** The days ahead as she shares them (0.3.1): swipe, tap a day, see what
+    it is and the mood and behaviour to expect. */
+function SharedDays({ c }: { c: CyShared }) {
+  const [sel, setSel] = useState(c.today);
+  const [marks, setMarks] = useState<Map<string, DayKind>>(
+    new Map((c.week ?? []).map((w) => [w.day, w.kind])));
+  const [day, setDay] = useState<CySharedDay | null>(null);
+  const first = addDays(weekStart(c.today), -14);
+  const last = addDays(weekStart(c.today), 7 * 8 + 6);
+  useEffect(() => {
+    homeApi.cySharedCalendar(c.id, first, last).then((r) => setMarks(new Map(r.days.map((d) => [d.day, d.kind])))).catch(() => {});
+  }, [c.id, first, last]);
+  useEffect(() => {
+    setDay(null);
+    if (sel !== c.today) homeApi.cySharedDay(c.id, sel).then(setDay).catch(() => setDay(null));
+  }, [c.id, c.today, sel]);
+  const isToday = sel === c.today;
+  return (
+    <>
+      <ScrollStrip marks={marks} today={c.today} selected={sel} onPick={setSel} back={2} ahead={8} />
+      {!isToday && (
+        <div className="cy-shared-day" aria-label="Den valgte dag">
+          <p className="cy-kicker">{sel > c.today ? `Forudsigelse · ${dayTitle(sel, c.today)}` : dayTitle(sel, c.today)}</p>
+          {!day && <p className="cy-dim">Henter…</p>}
+          {day && <><p className="cy-shared-line">{day.title}</p>
+            {day.sub && <p className="cy-dim">{day.sub}{day.chanceLabel ? ` · chance for graviditet: ${day.chanceLabel.toLowerCase()}` : ''}</p>}
+            {day.nextPeriodIn != null && day.nextPeriodIn > 0 && <p className="cy-dim">Menstruation om {days(day.nextPeriodIn)}</p>}</>}
+          <button className="cy-link" onClick={() => setSel(c.today)}>Tilbage til i dag</button>
+        </div>
       )}
-      {c.pattern && c.pattern.top.length > 0 && (
-        <p className="cy-dim">Plejer i denne fase: {c.pattern.top.map((t) => t.name.toLowerCase()).join(', ')}</p>
-      )}
-    </section>
+      {isToday && c.forecast && <ForecastCard f={c.forecast} title={`${c.name} i dag: humør og adfærd`} shared embedded />}
+      {!isToday && day?.forecast && <ForecastCard f={day.forecast} text={day.text}
+        title={`${c.name} · ${shortDate(sel)}: humør og adfærd`} shared embedded />}
+    </>
   );
 }
 
@@ -437,48 +555,177 @@ function Drops({ flow }: { flow: string }) {
   );
 }
 
-// ---- the calendar -------------------------------------------------------------------------------
+// ---- the calendar: months and a year, like a period app's ---------------------------------------
+
+const MONTHS_BACK = 6;
+const MONTHS_AHEAD = 6;
 
 export function CyklusCalendar({ month }: { month: string | null }) {
   const today = todayLocal();
-  const m = month ?? today.slice(0, 7);
-  const [list, setList] = useState<Map<string, { kind: DayKind; logged: boolean }> | null>(null);
+  const thisMonth = today.slice(0, 7);
+  const [mode, setMode] = useState<'month' | 'year'>('month');
+  const [year, setYear] = useState(Number(today.slice(0, 4)));
+  const [target, setTarget] = useState(month ?? thisMonth);
+  const [marks, setMarks] = useState<Map<string, CyCalDay> | null>(null);
+  const [yearMarks, setYearMarks] = useState<Map<string, CyCalDay> | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [info, setInfo] = useState<CyDayInfo | null>(null);
+  const [edit, setEdit] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
+  const months = useMemo(() => Array.from({ length: MONTHS_BACK + MONTHS_AHEAD + 1 },
+    (_, i) => addMonths(thisMonth, i - MONTHS_BACK)), [thisMonth]);
+  const listRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    setList(null);
-    const grid = monthGrid(m).filter((x): x is string => !!x);
-    homeApi.cyCalendar(grid[0], grid[grid.length - 1])
-      .then((r) => setList(new Map(r.days.map((x) => [x.day, { kind: x.kind, logged: x.logged }]))))
-      .catch((e) => setError(e.message));
-  }, [m]);
-  const lastAllowed = addMonths(today.slice(0, 7), 6);
+    const from = `${months[0]}-01`;
+    const lastGrid = monthGrid(months[months.length - 1]).filter((x): x is string => !!x);
+    homeApi.cyCalendar(from, lastGrid[lastGrid.length - 1])
+      .then((r) => setMarks(new Map(r.days.map((x) => [x.day, x])))).catch((e) => setError(e.message));
+  }, [months, version]);
+  useEffect(() => {
+    if (mode !== 'year') return;
+    setYearMarks(null);
+    homeApi.cyCalendar(`${year}-01-01`, `${year}-12-31`)
+      .then((r) => setYearMarks(new Map(r.days.map((x) => [x.day, x])))).catch((e) => setError(e.message));
+  }, [mode, year, version]);
+  useEffect(() => {
+    if (mode !== 'month' || !marks) return;
+    const el = listRef.current?.querySelector(`[data-month="${target}"]`);
+    (el as HTMLElement | null)?.scrollIntoView?.({ block: 'start' });
+  }, [mode, marks, target]);
+  useEffect(() => {
+    setInfo(null);
+    if (picked && !edit) homeApi.cyDayInfo(picked).then(setInfo).catch((e) => setError(e.message));
+  }, [picked, edit, version]);
+
+  async function toggle(day: string) {
+    if (day > today || busy) return;
+    setBusy(true); setError(null);
+    try { await homeApi.cyToggle(day); setVersion((v) => v + 1); }
+    catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  function tap(day: string) {
+    if (edit) void toggle(day);
+    else setPicked(picked === day ? null : day);
+  }
+
   return (
-    <div className="cy-page">
-      <CyBar title="Kalender" back={routeHash({ name: 'cyklus' })} />
-      <div className="cy-daynav">
-        <a className="cy-round" aria-label="Måneden før" href={routeHash({ name: 'cyklusCal', month: addMonths(m, -1) })}>‹</a>
-        <span className="cy-dayname">{monthTitle(m)}</span>
-        {m < lastAllowed ? <a className="cy-round" aria-label="Måneden efter" href={routeHash({ name: 'cyklusCal', month: addMonths(m, 1) })}>›</a>
-          : <span className="cy-round cy-ghost" aria-hidden />}
-      </div>
-      {error && <p className="cy-error" role="alert">{error}</p>}
-      <section className="cy-card cy-cal" aria-label={monthTitle(m)}>
-        <div className="cy-cal-grid">
-          {['M', 'T', 'O', 'T', 'F', 'L', 'S'].map((x, i) => <span key={i} className="cy-wd">{x}</span>)}
-          {monthGrid(m).map((day, i) => {
-            if (!day) return <span key={`e${i}`} />;
-            const v = list?.get(day);
-            const cls = `cy-dot cy-${v?.kind || 'none'}${day === today ? ' cy-today' : ''}`;
-            const inner = <span className={cls}>{dayOfMonth(day)}{v?.logged && <i className="cy-logged" />}</span>;
-            return day <= today
-              ? <a key={day} href={routeHash({ name: 'cyklusDay', day })} aria-label={`${day}${v?.kind ? ` ${KIND_LABEL[v.kind]}` : ''}`}>{inner}</a>
-              : <span key={day} aria-label={`${day}${v?.kind ? ` ${KIND_LABEL[v.kind]}` : ''}`}>{inner}</span>;
-          })}
+    <div className={`cy-page cy-cal-page${picked && !edit ? ' cy-has-sheet' : ''}`}>
+      <header className="cy-cal-head">
+        <a className="cy-round" aria-label="Luk kalenderen" href={routeHash({ name: 'cyklus' })}>✕</a>
+        <div className="cy-seg" role="tablist">
+          <button role="tab" aria-selected={mode === 'month'} className={mode === 'month' ? 'on' : ''}
+                  onClick={() => setMode('month')}>Måned</button>
+          <button role="tab" aria-selected={mode === 'year'} className={mode === 'year' ? 'on' : ''}
+                  onClick={() => { setMode('year'); setEdit(false); setPicked(null); }}>År</button>
         </div>
-        <Legend />
-        <p className="cy-dim">Tryk på en dag for at logge den. En prik under datoen: noget er logget.</p>
-      </section>
+        <button className="cy-link cy-today-link" onClick={() => {
+          setYear(Number(today.slice(0, 4))); setMode('month'); setTarget(thisMonth);
+          const el = listRef.current?.querySelector(`[data-month="${thisMonth}"]`);
+          (el as HTMLElement | null)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+          setPicked(edit ? null : today);
+        }}>I dag</button>
+      </header>
+      {error && <p className="cy-error" role="alert">{error}</p>}
+
+      {mode === 'month' && (
+        <>
+          <div className="cy-wd-row" aria-hidden>{['M', 'T', 'O', 'T', 'F', 'L', 'S'].map((x, i) => <span key={i}>{x}</span>)}</div>
+          {!marks && <p className="cy-note">Henter…</p>}
+          <div className="cy-months" ref={listRef}>
+            {marks && months.map((m) => (
+              <section key={m} className="cy-month" data-month={m} aria-label={monthTitle(m)}>
+                <h3 className="cy-month-title">{monthTitle(m).replace(` ${today.slice(0, 4)}`, '')}</h3>
+                <div className="cy-cal-grid">
+                  {monthGrid(m).map((day, i) => {
+                    if (!day) return <span key={`e${i}`} />;
+                    const v = marks.get(day);
+                    const future = day > today;
+                    const on = v?.kind === 'period';
+                    return (
+                      <button key={day} className={`cy-cal-day${edit && !future ? ' cy-editable' : ''}`}
+                              disabled={edit && future} onClick={() => tap(day)}
+                              aria-label={`${longDate(day)}${v?.kind ? `: ${KIND_LABEL[v.kind]}` : ''}`}
+                              aria-pressed={edit ? on : picked === day}>
+                        <span className={dotClass(v?.kind, day, today, edit ? undefined : picked ?? undefined)}>
+                          {dayOfMonth(day)}{v?.logged && <i className="cy-logged" />}
+                        </span>
+                        {edit && !future && <span className={`cy-check${on ? ' on' : ''}`} aria-hidden>{on ? '✓' : ''}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+          <Legend />
+          {!picked && (
+            <div className="cy-cal-bottom">
+              {edit
+                ? <button className="cy-pill" onClick={() => setEdit(false)}>Færdig</button>
+                : <button className="cy-pill" onClick={() => { setEdit(true); setPicked(null); }}>Rediger menstruationsdatoer</button>}
+              {edit && <p className="cy-dim">Tryk på de dage, du havde menstruation. {busy ? 'Gemmer…' : ''}</p>}
+            </div>
+          )}
+          {picked && !edit && <DaySheet day={picked} info={info} today={today} onClose={() => setPicked(null)} />}
+        </>
+      )}
+
+      {mode === 'year' && (
+        <section className="cy-year" aria-label={`År ${year}`}>
+          <div className="cy-daynav">
+            <button className="cy-round" aria-label="Året før" onClick={() => setYear(year - 1)}
+                    disabled={year <= Number(today.slice(0, 4)) - 2}>‹</button>
+            <span className="cy-dayname">{year}</span>
+            <button className="cy-round" aria-label="Året efter" onClick={() => setYear(year + 1)}
+                    disabled={year >= Number(today.slice(0, 4)) + 1}>›</button>
+          </div>
+          {!yearMarks && <p className="cy-note">Henter…</p>}
+          {yearMarks && (
+            <div className="cy-year-grid">
+              {Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`).map((m) => (
+                <button key={m} className="cy-mini" aria-label={monthTitle(m)}
+                        onClick={() => { if (months.includes(m)) { setTarget(m); setMode('month'); } }}>
+                  <span className={`cy-mini-title${m === thisMonth ? ' on' : ''}`}>{monthTitle(m).split(' ')[0]}</span>
+                  <span className="cy-mini-grid">
+                    {monthGrid(m).map((day, j) => day
+                      ? <i key={day} className={`cy-mini-day cy-${yearMarks.get(day)?.kind || 'none'}${day === today ? ' cy-today' : ''}`}>{dayOfMonth(day)}</i>
+                      : <i key={`e${j}`} />)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+          <Legend />
+        </section>
+      )}
     </div>
+  );
+}
+
+function DaySheet({ day, info, today, onClose }: { day: string; info: CyDayInfo | null; today: string; onClose: () => void }) {
+  return (
+    <section className="cy-sheet" aria-label="Dagen">
+      <div className="cy-sheet-head">
+        <h3>{shortDate(day)}{info?.cycleDay ? ` · Cyklusdag ${info.cycleDay}` : ''}</h3>
+        <button className="cy-x" aria-label="Luk" onClick={onClose}>✕</button>
+      </div>
+      {!info && <p className="cy-dim">Henter…</p>}
+      {info && (
+        <>
+          <p className="cy-sheet-title">{info.title}</p>
+          {info.chanceLabel && <p className="cy-dim">{info.phaseLabel} · chance for graviditet: {info.chanceLabel.toLowerCase()}</p>}
+          <p className="cy-day-text">{info.text}</p>
+          {info.forecast && <p className="cy-behaviour"><b>Forvent: </b>{info.forecast.behaviour}</p>}
+          {info.log && (info.log.flow || info.log.symptoms.length + info.log.moods.length > 0) && (
+            <div className="cy-chips cy-chips-ro">{[...info.log.symptoms, ...info.log.moods].map((x) => <span key={x}>{x}</span>)}</div>
+          )}
+          {day <= today && <a className="cy-pill cy-sheet-btn" href={routeHash({ name: 'cyklusDay', day })}>Log dagen</a>}
+        </>
+      )}
+    </section>
   );
 }
 

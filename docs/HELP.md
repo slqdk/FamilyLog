@@ -33,7 +33,7 @@ FamilyMap is shown to the administrator only.
 title: Front page
 where: Top bar
 since: 0.2.0
-changed: 0.3.0
+changed: 0.3.1
 
 Opens the front page at **/** - what everyone in the family sees on the
 phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
@@ -51,7 +51,17 @@ log with symptoms, mood and a note, the cycle day and phase, the next
 period, the fertile window, PMS days, and her own patterns per phase. It is
 a calendar estimate, not contraception. She chooses under **Deling** who
 sees her status (phase, cycle day, next period) and whether they also see
-the fertile days and her day's symptoms and mood. Nobody else sees
+the fertile days and her day's symptoms and mood.
+
+Since 0.3.1 the week strip swipes over the weeks before and after; tapping
+a day explains it - what it is, the chance of pregnancy, the symptoms to
+expect, and the mood and behaviour to expect (energy, mood, overskud,
+social, patience; "typisk" for the phase, or from her own logs and
+Dagbog). The calendar has a month and a year view, likely and possible
+period days, and **Rediger menstruationsdatoer** - tap the days she bled.
+Those she shares with can swipe her days too and see each day's
+prediction and mood forecast, by the same sharing rules (no Dagbog
+scores, no note, fertile days and chance only if she shares them). Nobody else sees
 anything - the administrator included - and her note is never shared.
 (An administrator who resets her password could sign in as her; that is
 the one limit no app can close.)

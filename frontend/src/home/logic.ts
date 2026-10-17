@@ -156,3 +156,14 @@ export function weekdayLetter(day: string): string {
 export function dayOfMonth(day: string): number {
   return parts(day).d;
 }
+
+/** "17. oktober" */
+export function longDate(day: string): string {
+  const p = parts(day);
+  return `${p.d}. ${MONTH_NAMES[p.m - 1]}`;
+}
+
+/** The short month name, "okt" */
+export function monthShort(month: string): string {
+  return MONTHS[Number(month.slice(5, 7)) - 1];
+}

@@ -62,7 +62,10 @@ def test_calendar_marks_logged_and_predicted_days():
     ps = [Period(_d(-47), _d(-43)), Period(_d(-19), _d(-15))]
     k = predict.day_kinds(ps, _d(-20), _d(40), D)
     assert k[_d(-19)] == "period" and k[_d(-15)] == "period" and k[_d(-14)] == ""
-    assert k[_d(9)] == "predicted" and k[_d(13)] == "predicted" and k[_d(14)] == ""
+    assert k[_d(9)] == "predicted" and k[_d(13)] == "predicted"
+    # 0.3.1: around a coming period, the days it may run early or late (two
+    # either side until three cycles are measured).
+    assert [k[_d(i)] for i in (6, 7, 8, 14, 15, 16)] == ["pms", "possible", "possible", "possible", "possible", ""]
     assert k[_d(9 + 14)] == "ovulation" and k[_d(9 + 9)] == "fertile"
     assert k[_d(5)] == "pms"
     # A period that started yesterday: the coming days of it are expected...
@@ -247,3 +250,105 @@ def test_an_old_log_gives_no_forecast():
     st = predict.status([Period(_d(-200), _d(-196)), Period(_d(-172), _d(-168))], D)
     assert st["stale"] is True and "phase" not in st and "late" not in st
     assert set(predict.day_kinds([Period(_d(-172))], D, _d(30), D).values()) == {""}
+
+
+def test_day_map_has_the_cycle_day_phase_and_chance():
+    ps = [Period(_d(-47), _d(-43)), Period(_d(-19), _d(-15))]
+    m = predict.day_map(ps, _d(-19), _d(40), D)
+    assert m[_d(-19)] == {"kind": "period", "cycleDay": 1, "phase": "menstruation", "chance": "lav"}
+    assert m[D]["cycleDay"] == 20 and m[D]["phase"] == "luteal" and m[D]["chance"] == "lav"
+    ov = _d(9 + 14)                                         # next cycle's ovulation, cycle day 15
+    assert m[ov]["kind"] == "ovulation" and m[ov]["chance"] == "høj"
+    assert m[ov - timedelta(days=4)]["chance"] == "middel" and m[ov + timedelta(days=2)]["chance"] == "lav"
+    # Cycles that vary more widen the possible days.
+    wide = [Period(_d(-120)), Period(_d(-96)), Period(_d(-62)), Period(_d(-36)), Period(_d(-6), _d(-2))]
+    assert predict.uncertainty(predict.averages(wide)) == 4
+
+
+def test_toggling_days_edits_her_periods():
+    ps = [Period(_d(-30), _d(-26)), Period(_d(-2))]           # one ended, one going (3 days so far)
+    out = predict.toggle_day(ps, _d(-25), D, 5)                # one more day on the first
+    assert out[0] == Period(_d(-30), _d(-25)) and out[1] == Period(_d(-2), None)
+    out = predict.toggle_day(ps, _d(-28), D, 5)                # a day out of the middle splits it
+    assert out[:2] == [Period(_d(-30), _d(-29)), Period(_d(-27), _d(-26))]
+    out = predict.toggle_day(ps, _d(-10), D, 5)                # a lone day is a period of its own
+    assert Period(_d(-10), _d(-10)) in out
+    out = predict.toggle_day([Period(D)], D, D, 5)             # the only day off: no period left
+    assert out == []
+
+
+def test_a_day_explained_with_its_forecast(client):
+    mor, _ = _login(client, "mor", "familie-kode-1", gender="female")
+    today = date.today()
+    for back in (40, 12):                                  # 28-day cycles; today cycle day 13
+        mor.post("/api/cyklus/period/start", json={"day": (today - timedelta(days=back)).isoformat()})
+    i = mor.get(f"/api/cyklus/dayinfo?day={today.isoformat()}").json()
+    assert i["cycleDay"] == 13 and i["title"] == "Frugtbar dag" and i["chanceLabel"] == "Høj"
+    assert i["nextPeriodIn"] == 16 and i["log"] is not None
+    labels = [x["label"] for x in i["forecast"]["items"]]
+    assert labels == ["Energi", "Humør", "Social lyst", "Tålmodighed"]
+    later = (today + timedelta(days=13)).isoformat()            # cycle day 26: PMS
+    j = mor.get(f"/api/cyklus/dayinfo?day={later}").json()
+    assert j["title"] in ("PMS-dag", "Menstruationen kan komme") and j["log"] is None
+    assert "Irritabel" in j["forecast"]["expect"] and j["forecast"]["expectSource"] == "typisk"
+    # Before anything is logged there is nothing to say.
+    assert mor.get(f"/api/cyklus/dayinfo?day={(today - timedelta(days=90)).isoformat()}").json()["title"] == "Ingen forudsigelse"
+
+
+def test_tapping_days_in_the_calendar_edits_periods(client):
+    mor, _ = _login(client, "mor", "familie-kode-1", gender="female")
+    today = date.today()
+    for back in range(30, 25, -1):
+        r = mor.post("/api/cyklus/period/toggle", json={"day": (today - timedelta(days=back)).isoformat()})
+        assert r.status_code == 200, r.text
+    ps = r.json()["periods"]
+    assert len(ps) == 1 and ps[0]["start"] == (today - timedelta(days=30)).isoformat() and ps[0]["periodDays"] == 5
+    mor.post("/api/cyklus/period/toggle", json={"day": (today - timedelta(days=28)).isoformat()})
+    assert len(mor.get("/api/cyklus/state").json()["own"]["periods"]) == 2
+    assert mor.post("/api/cyklus/period/toggle",
+                    json={"day": (today + timedelta(days=1)).isoformat()}).status_code == 400
+
+
+def test_the_shared_forecast_does_not_give_the_fertile_days_away(client):
+    mor, _ = _login(client, "mor", "familie-kode-1", gender="female")
+    far, far_id = _login(client, "far", "pw-far-12345678", role="user", gender="male")
+    today = date.today()
+    for back in (40, 12):                                  # fertile today
+        mor.post("/api/cyklus/period/start", json={"day": (today - timedelta(days=back)).isoformat()})
+    mor.put("/api/cyklus/settings", json={"viewers": [far_id]})
+    f = far.get("/api/cyklus/state").json()["shared"][0]["forecast"]
+    assert {x["key"]: x["value"] for x in f["items"]} == {"energy": 4, "mood": 4, "social": 4, "patience": 4}
+    assert all(x["key"] != "overskud" for x in f["items"])          # no Dagbog scores to viewers
+
+
+def test_people_she_shares_with_see_the_days_ahead_as_she_shares_them(client):
+    """0.3.1 (Søren): the prediction and mood forecast per day for the men
+    she shares with - fertile days and chance only when she shares them."""
+    mor, mor_id = _login(client, "mor", "familie-kode-1", gender="female")
+    far, far_id = _login(client, "far", "pw-far-12345678", role="user", gender="male")
+    barn, _ = _login(client, "barn", "familie-kode-2", gender="male")
+    today = date.today()
+    for back in (40, 12):                                  # fertile today, PMS in ~11 days
+        mor.post("/api/cyklus/period/start", json={"day": (today - timedelta(days=back)).isoformat()})
+    mor.put("/api/cyklus/day", json={"day": today.isoformat(), "note": "Hemmelig"})
+    t = today.isoformat()
+    assert far.get(f"/api/cyklus/shared/day?owner={mor_id}&day={t}").status_code == 403    # not shared yet
+    mor.put("/api/cyklus/settings", json={"viewers": [far_id]})
+    d = far.get(f"/api/cyklus/shared/day?owner={mor_id}&day={t}").json()
+    assert d["phase"] == "follicular" and d["kind"] == "" and "chance" not in d and "Frugt" not in str(d)
+    assert "Hemmelig" not in str(d) and "log" not in d
+    assert [x["key"] for x in d["forecast"]["items"]] == ["energy", "mood", "social", "patience"]
+    pms = far.get(f"/api/cyklus/shared/day?owner={mor_id}&day={(today + timedelta(days=12)).isoformat()}").json()
+    assert pms["title"] == "PMS-dag" and "Irritabel" in pms["forecast"]["expect"]
+    cal = far.get(f"/api/cyklus/shared/calendar?owner={mor_id}&frm={t}"
+                  f"&to={(today + timedelta(days=60)).isoformat()}").json()["days"]
+    kinds = {x["kind"] for x in cal}
+    assert "predicted" in kinds and not kinds & {"fertile", "ovulation"}
+    # With the fertile days shared they show, with the chance.
+    mor.put("/api/cyklus/settings", json={"shareFertile": True})
+    d = far.get(f"/api/cyklus/shared/day?owner={mor_id}&day={t}").json()
+    assert d["title"] == "Frugtbar dag" and d["chanceLabel"] == "Høj"
+    # Bounds, and nobody else.
+    assert far.get(f"/api/cyklus/shared/day?owner={mor_id}&day={(today + timedelta(days=200)).isoformat()}").status_code == 400
+    assert barn.get(f"/api/cyklus/shared/day?owner={mor_id}&day={t}").status_code == 403
+    assert client.get(f"/api/cyklus/shared/calendar?owner={mor_id}&frm={t}&to={t}").status_code == 403
