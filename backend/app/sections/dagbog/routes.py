@@ -93,10 +93,12 @@ def dagbog_admin(request: Request):
 
 @router.put("/api/dagbog/admin/settings")
 def dagbog_admin_save(body: dict, request: Request):
-    """{"tags": [...]} and/or {"members": {"<user id>": [fields]}}."""
+    """{"tags": [...]}, {"foods": [...]} and/or {"members": {"<user id>": [fields]}}."""
     _admin(request)
     if "tags" in body:
         _call(dagbog.set_tags, body["tags"])
+    if "foods" in body:
+        _call(dagbog.set_foods, body["foods"])
     for uid, fields in (body.get("members") or {}).items():
         try:
             uid_int = int(uid)

@@ -8,16 +8,15 @@ import { addDays, dayTitle, face, mean, routeHash, shortDay, todayLocal, weekSta
     the page says so where you write them. */
 
 type Draft = {
-  mood: number | null; sleep: number | null; energy: number | null; mental: number | null;
-  food: number | null; alcohol: number | null; tags: string[]; highlight: string;
+  mood: number | null; mental: number | null; alcohol: number | null;
+  foods: string[]; tags: string[]; highlight: string;
 };
-const EMPTY: Draft = { mood: null, sleep: null, energy: null, mental: null, food: null,
-                       alcohol: null, tags: [], highlight: '' };
+const EMPTY: Draft = { mood: null, mental: null, alcohol: null, foods: [], tags: [], highlight: '' };
 
 function toDraft(e: DagbogEntry | null): Draft {
-  if (!e) return { ...EMPTY, tags: [] };
-  return { mood: e.mood, sleep: e.sleep, energy: e.energy, mental: e.mental, food: e.food,
-           alcohol: e.alcohol, tags: [...e.tags], highlight: e.highlight ?? '' };
+  if (!e) return { ...EMPTY, foods: [], tags: [] };
+  return { mood: e.mood, mental: e.mental, alcohol: e.alcohol, foods: [...(e.foods ?? [])],
+           tags: [...e.tags], highlight: e.highlight ?? '' };
 }
 
 export function Bar({ title, back = '#/' }: { title: string; back?: string }) {
@@ -101,7 +100,7 @@ export function DagbogPage({ day }: { day: string }) {
         {(!cfg || saved === undefined) && !error && <p className="fm-note">Henter…</p>}
         {error && <p className="fm-error">{error}</p>}
         {cfg && saved !== undefined && fields.map((f) => (
-          <FieldBox key={f.key} f={f} draft={draft} set={set} tags={cfg.tags} day={day}
+          <FieldBox key={f.key} f={f} draft={draft} set={set} lists={{ tags: cfg.tags, foods: cfg.foods }} day={day}
                     hasPhoto={!!saved?.hasPhoto} photoV={photoV} busy={busy}
                     onPhoto={photo}
                     onRemovePhoto={async () => {
@@ -113,7 +112,7 @@ export function DagbogPage({ day }: { day: string }) {
           <button className="fm-link fm-danger hm-delete" disabled={busy} onClick={async () => {
             if (!confirm('Slet hele dagen?')) return;
             await homeApi.deleteEntry(day);
-            setSaved(null); setDraft({ ...EMPTY, tags: [] }); setNote('Dagen er slettet.');
+            setSaved(null); setDraft({ ...EMPTY, foods: [], tags: [] }); setNote('Dagen er slettet.');
           }}>Slet dagen</button>
         )}
       </main>
@@ -126,9 +125,9 @@ export function DagbogPage({ day }: { day: string }) {
   );
 }
 
-function FieldBox({ f, draft, set, tags, day, hasPhoto, photoV, busy, onPhoto, onRemovePhoto }: {
+function FieldBox({ f, draft, set, lists, day, hasPhoto, photoV, busy, onPhoto, onRemovePhoto }: {
   f: DagbogField; draft: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void;
-  tags: string[]; day: string; hasPhoto: boolean; photoV: string; busy: boolean;
+  lists: { tags: string[]; foods: string[] }; day: string; hasPhoto: boolean; photoV: string; busy: boolean;
   onPhoto: (f: File | undefined) => void; onRemovePhoto: () => void;
 }) {
   const key = f.key as keyof Draft;
@@ -164,16 +163,20 @@ function FieldBox({ f, draft, set, tags, day, hasPhoto, photoV, busy, onPhoto, o
       </section>
     );
   }
-  if (f.kind === 'tags') {
+  if (f.kind === 'tags' || f.kind === 'foods') {
+    // Activities and food: tap what fits the day - the lists are the admin's.
+    const name = f.kind;
+    const picked = draft[name];
     return (
       <section className="fm-sheet hm-field" aria-label={f.label}>
         <h3 className="hm-field-label">{f.label}</h3>
+        {f.hint && <p className="hm-hint">{f.hint}</p>}
         <div className="hm-tags">
-          {tags.map((t) => {
-            const on = draft.tags.includes(t);
+          {lists[name].map((t) => {
+            const on = picked.includes(t);
             return (
               <button key={t} className={on ? 'on' : ''} aria-pressed={on}
-                      onClick={() => set('tags', on ? draft.tags.filter((x) => x !== t) : [...draft.tags, t])}>{t}</button>
+                      onClick={() => set(name, on ? picked.filter((x) => x !== t) : [...picked, t])}>{t}</button>
             );
           })}
         </div>
@@ -204,8 +207,7 @@ function FieldBox({ f, draft, set, tags, day, hasPhoto, photoV, busy, onPhoto, o
 
 // ---- the family's week -----------------------------------------------------------------
 
-const SCALE_KEYS: [keyof DagbogEntry, string][] = [
-  ['sleep', 'Søvn'], ['energy', 'Energi'], ['mental', 'Overskud'], ['food', 'Mad']];
+const SCALE_KEYS: [keyof DagbogEntry, string][] = [['mental', 'Mentalt overskud']];
 
 export function FamilyWeek({ me, week }: { me: FmUser; week: string | null }) {
   const today = todayLocal();
@@ -282,7 +284,14 @@ export function FamilyWeek({ me, week }: { me: FmUser; week: string | null }) {
               ))}
               {picked.alcohol != null && <div><dt>Alkohol</dt><dd>{picked.alcohol} genstande</dd></div>}
             </dl>
-            {picked.tags.length > 0 && <div className="hm-tags hm-tags-ro">{picked.tags.map((t) => <span key={t}>{t}</span>)}</div>}
+            {(picked.foods ?? []).length > 0 && (
+              <><p className="hm-detail-label">Mad</p>
+                <div className="hm-tags hm-tags-ro">{picked.foods.map((t) => <span key={t}>{t}</span>)}</div></>
+            )}
+            {picked.tags.length > 0 && (
+              <><p className="hm-detail-label">Aktiviteter</p>
+                <div className="hm-tags hm-tags-ro">{picked.tags.map((t) => <span key={t}>{t}</span>)}</div></>
+            )}
             {pick?.userId === me.id
               ? <a className="fm-link" href={routeHash({ name: 'dagbog', day: picked.day })}>Åbn din dag</a>
               : <p className="fm-dim">Teksten og billedet er kun for {pickedName}.</p>}

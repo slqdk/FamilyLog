@@ -6,30 +6,25 @@ import { dagbogAdmin, type DagbogAdminSettings } from './api';
     shown here - the highlight text and photo are their author's alone. */
 export function DagbogAdmin() {
   const [s, setS] = useState<DagbogAdminSettings | null>(null);
-  const [tags, setTags] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    dagbogAdmin.settings().then((v) => { setS(v); setTags(v.tags.join('\n')); })
-      .catch((e) => setError((e as Error).message));
+    dagbogAdmin.settings().then(setS).catch((e) => setError((e as Error).message));
   }, []);
 
   async function save(body: Parameters<typeof dagbogAdmin.save>[0], done: string) {
     setError(null); setNote(null);
-    try {
-      const v = await dagbogAdmin.save(body);
-      setS(v); setTags(v.tags.join('\n')); setNote(done);
-    } catch (e) { setError((e as Error).message); }
+    try { setS(await dagbogAdmin.save(body)); setNote(done); }
+    catch (e) { setError((e as Error).message); }
   }
 
   if (!s) return <div className="empty">{error ?? 'Loading…'}</div>;
-  const tagList = tags.split('\n').map((t) => t.trim()).filter(Boolean);
   return (
     <div className="fma">
       <header className="fma-head">
         <span className="fma-title">Dagbog</span>
-        <span className="fma-stats">Everyone rates their day on the front page. The family sees ratings and
+        <span className="fma-stats">Everyone rates their day on the front page. The family sees ratings, food and
           activities; the day's highlight text and photo are only ever shown to their author.</span>
       </header>
       <div className="fma-main fma-scroll fma-pad dg-admin">
@@ -64,19 +59,38 @@ export function DagbogAdmin() {
             </table>
           </div>
         </section>
-        <section className="settings-group" data-help="dagbog.tags">
-          <div className="settings-group-head"><h2>Activities</h2></div>
-          <p className="settings-note">One per line. Everyone picks from this list; removing one keeps it on the
-            days that already have it.</p>
-          <textarea rows={Math.max(6, tagList.length + 1)} value={tags} onChange={(e) => setTags(e.target.value)} />
-          <div className="settings-inline dg-actions">
-            <button className="primary-btn" disabled={tagList.join('\n') === s.tags.join('\n')}
-                    onClick={() => void save({ tags: tagList }, 'Activities saved.')}>Save activities</button>
-          </div>
-        </section>
+        <ListEditor title="Food" help="dagbog.foods" saved={s.foods} button="Save food"
+                    note="What people tick under Mad, one per line (homemade, fast food, cake, chips…)."
+                    onSave={(list) => save({ foods: list }, 'Food saved.')} />
+        <ListEditor title="Activities" help="dagbog.tags" saved={s.tags} button="Save activities"
+                    note="What people tick under Aktiviteter, one per line."
+                    onSave={(list) => save({ tags: list }, 'Activities saved.')} />
         {note && <p className="fma-ok">{note}</p>}
         {error && <p className="fma-error">{error}</p>}
       </div>
     </div>
+  );
+}
+
+/** One list the family picks from. Removing an item keeps it on the days
+    that already have it. */
+function ListEditor({ title, help, saved, note, button, onSave }: {
+  title: string; help: string; saved: string[]; note: string; button: string;
+  onSave: (list: string[]) => void;
+}) {
+  const [text, setText] = useState(saved.join('\n'));
+  useEffect(() => setText(saved.join('\n')), [saved]);
+  const list = text.split('\n').map((t) => t.trim()).filter(Boolean);
+  return (
+    <section className="settings-group" data-help={help}>
+      <div className="settings-group-head"><h2>{title}</h2></div>
+      <p className="settings-note">{note} Removing one keeps it on the days that already have it.</p>
+      <textarea rows={Math.max(6, list.length + 1)} value={text} aria-label={title}
+                onChange={(e) => setText(e.target.value)} />
+      <div className="settings-inline dg-actions">
+        <button className="primary-btn" disabled={list.join('\n') === saved.join('\n')}
+                onClick={() => onSave(list)}>{button}</button>
+      </div>
+    </section>
   );
 }

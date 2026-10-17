@@ -95,10 +95,11 @@ describe('Alf on the front page', () => {
 });
 
 const CONFIG: DagbogConfig = {
-  today: '2026-10-17', maxDaysBack: 366, tags: ['Sport', 'Venner'],
+  today: '2026-10-17', maxDaysBack: 366, tags: ['Sport', 'Venner'], foods: ['Hjemmelavet', 'Kage', 'Chips'],
   fields: [
     { key: 'mood', kind: 'scale', label: 'Humør', low: 'Rigtig skidt', high: 'Rigtig godt', faces: ['😞', '🙁', '😐', '🙂', '😄'] },
-    { key: 'sleep', kind: 'scale', label: 'Søvn', low: 'Sov elendigt', high: 'Sov rigtig godt' },
+    { key: 'mental', kind: 'scale', label: 'Mentalt overskud', low: 'Intet overskud', high: 'Masser af overskud' },
+    { key: 'foods', kind: 'foods', label: 'Mad', hint: 'Hvad spiste du i dag?' },
     { key: 'alcohol', kind: 'count', label: 'Alkohol', unit: 'genstande', max: 30 },
     { key: 'tags', kind: 'tags', label: 'Aktiviteter' },
     { key: 'highlight', kind: 'private', label: 'Dagens højdepunkt' },
@@ -112,11 +113,14 @@ describe('Dagbog', () => {
     vi.spyOn(homeApi, 'dagbogConfig').mockResolvedValue(CONFIG);
     vi.spyOn(homeApi, 'entry').mockResolvedValue({ entry: null });
     const save = vi.spyOn(homeApi, 'saveEntry').mockImplementation(async (b) => ({
-      entry: { userId: 1, mood: null, sleep: null, energy: null, mental: null, food: null, alcohol: null,
+      entry: { userId: 1, mood: null, mental: null, alcohol: null, foods: [],
                tags: [], updatedAt: 'x', highlight: '', hasPhoto: false, ...b } as never }));
     render(<DagbogPage day="2026-10-17" />);
     fireEvent.click(await screen.findByLabelText('Humør 4'));
-    fireEvent.click(screen.getByLabelText('Søvn 2'));
+    fireEvent.click(screen.getByLabelText('Mentalt overskud 2'));
+    fireEvent.click(screen.getByText('Hjemmelavet'));
+    fireEvent.click(screen.getByText('Kage'));
+    expect(screen.queryByText('Søvn')).toBeNull();
     fireEvent.click(screen.getByLabelText('Flere'));
     fireEvent.click(screen.getByLabelText('Flere'));
     fireEvent.click(screen.getByText('Sport'));
@@ -124,7 +128,7 @@ describe('Dagbog', () => {
     expect(screen.getByText('🔒 Kun du kan se teksten og billedet.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Gem dagen'));
     await waitFor(() => expect(save).toHaveBeenCalledWith({
-      day: '2026-10-17', mood: 4, sleep: 2, energy: null, mental: null, food: null, alcohol: 2,
+      day: '2026-10-17', mood: 4, mental: 2, alcohol: 2, foods: ['Hjemmelavet', 'Kage'],
       tags: ['Sport'], highlight: 'Mål!' }));
     expect(await screen.findByText('Gemt ✓')).toBeInTheDocument();
   });

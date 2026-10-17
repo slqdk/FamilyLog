@@ -1,9 +1,13 @@
 """Dagbog (FamilyLog 0.2.0): each person rates their day.
 
-One entry per person per day: mood (1-5), sleep, energy, mental readiness
-("mentalt overskud") and food (1-5 each), alcohol (units), activity tags
-from a list the administrator keeps, and the day's highlight - a text and
-one photo.
+One entry per person per day: mood and mental readiness ("mentalt
+overskud", 1-5 each), what was eaten (food categories), alcohol (units),
+activities, and the day's highlight - a text and one photo. The food
+categories and the activities are lists the administrator keeps.
+
+0.2.1 (Søren): sleep and energy are gone and food is categories instead of
+a 1-5 scale. The old columns stay in the table (migrations only add), are
+no longer written, and are not sent.
 
 Privacy, as Søren set it: the family sees everyone's ratings and tags; the
 highlight text and photo are the author's alone. That rule is enforced here,
@@ -28,20 +32,22 @@ from ..familymap import familymap as fm
 SCALES = {
     "mood": {"label": "Humør", "low": "Rigtig skidt", "high": "Rigtig godt",
              "faces": ["😞", "🙁", "😐", "🙂", "😄"]},
-    "sleep": {"label": "Søvn", "low": "Sov elendigt", "high": "Sov rigtig godt"},
-    "energy": {"label": "Energi", "low": "Helt flad", "high": "Fuld af energi"},
     "mental": {"label": "Mentalt overskud", "low": "Intet overskud", "high": "Masser af overskud"},
-    "food": {"label": "Mad", "low": "Spiste dårligt", "high": "Spiste rigtig godt"},
 }
 FIELDS = {
     **{k: {"kind": "scale", **v} for k, v in SCALES.items()},
+    "foods": {"kind": "foods", "label": "Mad", "hint": "Hvad spiste du i dag?"},
     "alcohol": {"kind": "count", "label": "Alkohol", "unit": "genstande", "max": 30},
-    "tags": {"kind": "tags", "label": "Aktiviteter"},
+    "tags": {"kind": "tags", "label": "Aktiviteter", "hint": "Hvad lavede du i dag?"},
     "highlight": {"kind": "private", "label": "Dagens højdepunkt"},
 }
 FIELD_ORDER = list(FIELDS)
-DEFAULT_TAGS = ["Skole/arbejde", "Sport", "Venner", "Familie", "Udenfor", "Skærm",
-                "Syg", "Fri"]
+DEFAULT_TAGS = ["Skole/arbejde", "Sport", "Computer", "Gaming", "Fjernsyn", "Mobil",
+                "Vedligehold af hus og have", "Rengøring", "Madlavning", "Indkøb",
+                "Venner", "Familie", "Udenfor", "Læsning", "Hobby", "Fri", "Syg"]
+DEFAULT_FOODS = ["Hjemmelavet", "Fastfood", "Takeaway", "Restaurant", "Kage", "Chips",
+                 "Slik", "Is", "Sodavand", "Frugt og grønt", "Morgenmad", "Madpakke"]
+LISTS = {"tags": DEFAULT_TAGS, "foods": DEFAULT_FOODS}
 MAX_TAGS = 40
 MAX_TAG = 30
 MAX_HIGHLIGHT = 2000
@@ -59,21 +65,40 @@ class NotFound(LookupError):
 
 # ---- settings -------------------------------------------------------------------------------
 
-def tags() -> list[str]:
+def choice_list(name: str) -> list[str]:
+    """The activities ("tags") or the food categories ("foods"): the
+    administrator's list, else the default."""
+    default = LISTS[name]
     with db.connect() as con:
-        r = con.execute("SELECT value FROM dagbog_settings WHERE key = 'tags'").fetchone()
+        r = con.execute("SELECT value FROM dagbog_settings WHERE key = ?", (name,)).fetchone()
     if not r:
-        return list(DEFAULT_TAGS)
+        return list(default)
     try:
         value = json.loads(r["value"])
-        return [str(t) for t in value] if isinstance(value, list) else list(DEFAULT_TAGS)
+        return [str(t) for t in value] if isinstance(value, list) else list(default)
     except json.JSONDecodeError:
-        return list(DEFAULT_TAGS)
+        return list(default)
+
+
+def tags() -> list[str]:
+    return choice_list("tags")
+
+
+def foods() -> list[str]:
+    return choice_list("foods")
 
 
 def set_tags(values: list) -> list[str]:
+    return set_choice_list("tags", values)
+
+
+def set_foods(values: list) -> list[str]:
+    return set_choice_list("foods", values)
+
+
+def set_choice_list(name: str, values: list) -> list[str]:
     if not isinstance(values, list):
-        raise Invalid("Tags must be a list.")
+        raise Invalid(f"{name} must be a list.")
     out: list[str] = []
     for v in values:
         t = " ".join(str(v or "").split())
@@ -86,9 +111,9 @@ def set_tags(values: list) -> list[str]:
     if len(out) > MAX_TAGS:
         raise Invalid(f"At most {MAX_TAGS} tags.")
     with db.connect() as con:
-        con.execute("INSERT INTO dagbog_settings (key, value) VALUES ('tags', ?)"
+        con.execute("INSERT INTO dagbog_settings (key, value) VALUES (?, ?)"
                     " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (json.dumps(out, ensure_ascii=False),))
+                    (name, json.dumps(out, ensure_ascii=False)))
     return out
 
 
@@ -119,7 +144,7 @@ def set_fields_for(user_id: int, fields: list) -> list[str]:
 
 def config(user_id: int) -> dict:
     mine = fields_for(user_id)
-    return {"fields": [{"key": k, **FIELDS[k]} for k in mine], "tags": tags(),
+    return {"fields": [{"key": k, **FIELDS[k]} for k in mine], "tags": tags(), "foods": foods(),
             "today": date.today().isoformat(), "maxDaysBack": MAX_DAYS_BACK}
 
 
@@ -138,12 +163,13 @@ def _day(value) -> str:
     return d.isoformat()
 
 
-_COLUMNS = ("mood", "sleep", "energy", "mental", "food", "alcohol")
+_COLUMNS = ("mood", "mental", "alcohol")
 
 
 def _entry_dto(r, own: bool) -> dict:
     out = {"userId": r["user_id"], "day": r["day"],
            **{c: r[c] for c in _COLUMNS},
+           "foods": json.loads(r["foods"] or "[]"),
            "tags": json.loads(r["tags"] or "[]"), "updatedAt": r["updated_at"]}
     if own:
         # Only the author ever gets these keys (the privacy rule).
@@ -166,7 +192,7 @@ def save_entry(user_id: int, body: dict) -> dict:
     day = _day(body.get("day"))
     allowed = set(fields_for(user_id))
     values: dict = {}
-    for key in ("mood", "sleep", "energy", "mental", "food"):
+    for key in SCALES:
         v = body.get(key) if key in allowed else None
         if v is not None and (not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= 5):
             raise Invalid(f"{FIELDS[key]['label']} skal være 1-5.")
@@ -176,15 +202,8 @@ def save_entry(user_id: int, body: dict) -> dict:
                           or not 0 <= a <= FIELDS["alcohol"]["max"]):
         raise Invalid(f"Alkohol skal være 0-{FIELDS['alcohol']['max']} genstande.")
     values["alcohol"] = a
-    chosen: list[str] = []
-    if "tags" in allowed:
-        known = {t.lower(): t for t in tags()}
-        for t in body.get("tags") or []:
-            k = str(t).lower()
-            if k not in known:
-                raise Invalid(f"Ukendt aktivitet: {t}")
-            if known[k] not in chosen:
-                chosen.append(known[k])
+    chosen = _picked(body, allowed, "tags", tags(), "Ukendt aktivitet")
+    eaten = _picked(body, allowed, "foods", foods(), "Ukendt madtype")
     highlight = ""
     if "highlight" in allowed:
         highlight = str(body.get("highlight") or "").strip()
@@ -193,15 +212,30 @@ def save_entry(user_id: int, body: dict) -> dict:
     now = db.utcnow()
     with db.connect() as con:
         con.execute(
-            "INSERT INTO dagbog_entries (user_id, day, mood, sleep, energy, mental, food, alcohol,"
-            " tags, highlight, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
-            " ON CONFLICT(user_id, day) DO UPDATE SET mood=excluded.mood, sleep=excluded.sleep,"
-            " energy=excluded.energy, mental=excluded.mental, food=excluded.food,"
-            " alcohol=excluded.alcohol, tags=excluded.tags, highlight=excluded.highlight,"
-            " updated_at=excluded.updated_at",
+            "INSERT INTO dagbog_entries (user_id, day, mood, mental, alcohol, foods,"
+            " tags, highlight, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(user_id, day) DO UPDATE SET mood=excluded.mood,"
+            " mental=excluded.mental, alcohol=excluded.alcohol, foods=excluded.foods,"
+            " tags=excluded.tags, highlight=excluded.highlight, updated_at=excluded.updated_at",
             (user_id, day, *(values[c] for c in _COLUMNS),
-             json.dumps(chosen, ensure_ascii=False), highlight, now, now))
+             json.dumps(eaten, ensure_ascii=False), json.dumps(chosen, ensure_ascii=False),
+             highlight, now, now))
     return get_entry(user_id, day)
+
+
+def _picked(body: dict, allowed: set, field: str, known_list: list[str], unknown: str) -> list[str]:
+    """The chosen items of a list field, spelled as in the list, no repeats."""
+    if field not in allowed:
+        return []
+    known = {t.lower(): t for t in known_list}
+    out: list[str] = []
+    for t in body.get(field) or []:
+        k = str(t).lower()
+        if k not in known:
+            raise Invalid(f"{unknown}: {t}")
+        if known[k] not in out:
+            out.append(known[k])
+    return out
 
 
 def delete_entry(user_id: int, day: str) -> None:
@@ -259,8 +293,8 @@ def set_photo(user_id: int, day: str, data: bytes) -> dict:
                         (user_id, day)).fetchone()
         if not r:
             now = db.utcnow()
-            con.execute("INSERT INTO dagbog_entries (user_id, day, tags, highlight, created_at,"
-                        " updated_at) VALUES (?, ?, '[]', '', ?, ?)", (user_id, day, now, now))
+            con.execute("INSERT INTO dagbog_entries (user_id, day, tags, foods, highlight, created_at,"
+                        " updated_at) VALUES (?, ?, '[]', '[]', '', ?, ?)", (user_id, day, now, now))
     remove_photo(user_id, day, missing_ok=True)
     folder = photos_dir(user_id)
     folder.mkdir(parents=True, exist_ok=True)
@@ -311,7 +345,7 @@ def forget_user(user_id: int) -> None:
 def admin_settings() -> dict:
     with db.connect() as con:
         users = con.execute("SELECT id, username, role FROM users ORDER BY id").fetchall()
-    return {"tags": tags(),
+    return {"tags": tags(), "foods": foods(),
             "fields": [{"key": k, "label": FIELDS[k]["label"], "kind": FIELDS[k]["kind"]}
                        for k in FIELD_ORDER],
             "members": [{"id": u["id"], "username": u["username"], "role": u["role"],

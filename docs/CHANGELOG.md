@@ -2,6 +2,28 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.2.1 - 2026-10-17
+
+The Dagbog after the first look.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Søvn** and **Energi** are gone from the Dagbog.
+- **Mad** is now what you ate, ticked from a list: Hjemmelavet, Fastfood,
+  Takeaway, Restaurant, Kage, Chips, Slik, Is, Sodavand, Frugt og grønt,
+  Morgenmad, Madpakke. The administrator edits the list (Dagbog → Settings →
+  Food).
+- **Aktiviteter** has a longer default list: Skole/arbejde, Sport, Computer,
+  Gaming, Fjernsyn, Mobil, Vedligehold af hus og have, Rengøring, Madlavning,
+  Indkøb, Venner, Familie, Udenfor, Læsning, Hobby, Fri, Syg. (A list already
+  saved under Dagbog → Settings is kept as it is.)
+- The family week shows the food and activities of a day.
+- The **Gem dagen** bar no longer shows the form through it.
+
+Days saved in 0.2.0 keep their mood, mental readiness, alcohol, activities
+and text; their old sleep, energy and 1-5 food values stay in the database
+but are no longer shown.
+
 ## 0.2.0 - 2026-10-17
 
 A front page for the family, Alf to talk to, and the Dagbog.

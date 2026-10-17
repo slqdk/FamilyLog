@@ -38,11 +38,30 @@ def _m001_dagbog(con: sqlite3.Connection) -> None:
     """)
 
 
+def _m002_foods(con: sqlite3.Connection) -> None:
+    """0.2.1: food as categories (a JSON list), not a 1-5 scale; sleep and
+    energy are no longer asked. The old columns stay (migrations only add).
+    A person whose fields were set by hand and had "food" gets "foods"."""
+    import json
+    from app.core.migrations import add_column
+    add_column(con, "dagbog_entries", "foods", "TEXT NOT NULL DEFAULT '[]'")
+    for r in con.execute("SELECT user_id, fields FROM dagbog_members").fetchall():
+        try:
+            fields = json.loads(r[1])
+        except ValueError:
+            continue
+        if "food" in fields and "foods" not in fields:
+            fields.append("foods")
+            con.execute("UPDATE dagbog_members SET fields = ? WHERE user_id = ?",
+                        (json.dumps(fields), r[0]))
+
+
 SECTION = Section(
     id="dagbog",
     title="Dagbog",
     router=router,
-    migrations=[(1, "dagbog entries, settings, members", _m001_dagbog)],
+    migrations=[(1, "dagbog entries, settings, members", _m001_dagbog),
+                (2, "food categories", _m002_foods)],
     family_prefixes=("/api/dagbog/",),
     on_user_deleted=dagbog.forget_user,
 )

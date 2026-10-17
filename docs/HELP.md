@@ -473,11 +473,12 @@ Settings → Maps.
 title: Dagbog
 where: Top bar (administrator)
 since: 0.2.0
+changed: 0.2.1
 
 The Dagbog's settings. Everyone rates their own day on the front page
-(**Dagbog**): mood, sleep, energy, mental readiness, food, alcohol,
-activities and the day's highlight (a text and a photo). The family sees
-each other's ratings and activities as a week (**Familien**); the highlight
+(**Dagbog**): mood, mental readiness, what they ate (food categories),
+alcohol, activities and the day's highlight (a text and a photo). The family
+sees each other's ratings, food and activities as a week (**Familien**); the highlight
 text and photo are only ever shown to the person who wrote them - not to the
 administrator either, here or anywhere else.
 
@@ -495,8 +496,18 @@ made in Settings → Accounts (family accounts too).
 title: Activities
 where: Dagbog → Settings
 since: 0.2.0
+changed: 0.2.1
 
 The list of activities everyone picks from in their Dagbog (school or work,
-sport, friends, ...), one per line. Duplicates and empty lines are dropped;
+sport, computer, television, house and garden, friends, ...), one per line. Duplicates and empty lines are dropped;
 at most 40, each up to 30 characters. Removing one keeps it on the days
 that already have it.
+
+## dagbog.foods
+title: Food
+where: Dagbog → Settings
+since: 0.2.1
+
+The food categories everyone ticks under **Mad** - homemade, fast food,
+takeaway, cake, chips, sweets, fruit and vegetables and so on - one per
+line, same rules as the activities. The family sees what each other ticked.

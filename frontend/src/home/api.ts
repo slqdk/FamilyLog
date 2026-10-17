@@ -36,16 +36,16 @@ export interface ChatJob {
 }
 export interface ChatState { messages: ChatMessage[]; job: ChatJob | null; model: boolean }
 
-export type FieldKind = 'scale' | 'count' | 'tags' | 'private';
+export type FieldKind = 'scale' | 'count' | 'tags' | 'foods' | 'private';
 export interface DagbogField {
-  key: string; kind: FieldKind; label: string;
+  key: string; kind: FieldKind; label: string; hint?: string;
   low?: string; high?: string; faces?: string[]; unit?: string; max?: number;
 }
-export interface DagbogConfig { fields: DagbogField[]; tags: string[]; today: string; maxDaysBack: number }
+export interface DagbogConfig { fields: DagbogField[]; tags: string[]; foods: string[]; today: string; maxDaysBack: number }
 export interface DagbogEntry {
   userId: number; day: string;
-  mood: number | null; sleep: number | null; energy: number | null; mental: number | null;
-  food: number | null; alcohol: number | null; tags: string[]; updatedAt: string;
+  mood: number | null; mental: number | null; alcohol: number | null;
+  foods: string[]; tags: string[]; updatedAt: string;
   /** only on the author's own entry */
   highlight?: string; hasPhoto?: boolean;
 }

@@ -5,7 +5,20 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
-## 0.2.0 - Start here
+## 0.2.1 - Start here
+
+Dagbog changes from Søren's first look (read 0.2.0 below for the rest):
+fields are now `mood`, `mental` (1-5), `foods` (list, like `tags`), `alcohol`,
+`tags`, `highlight`. Sleep/energy/food-scale were removed from `FIELDS`;
+their columns stay (additive migrations) and are not written or sent.
+Dagbog migration 2 adds `foods` and gives `foods` to members who had `food`.
+Both lists come from `choice_list("tags"|"foods")` (admin-saved or
+`DEFAULT_TAGS`/`DEFAULT_FOODS`). The front page treats `tags` and `foods`
+the same way (chips). The save bar is solid now.
+
+---
+
+## 0.2.0
 
 **What changed.** A mobile front page for the whole family at **/**, in
 Alf's Atlas's look: Alf to talk to, tiles for Alf's Atlas, the Dagbog and

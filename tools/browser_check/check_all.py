@@ -247,7 +247,11 @@ with sync_playwright() as p:
     fp.locator(".hm-tile", has_text="Dagbog").click()
     fp.wait_for_selector(".hm-field")
     fp.get_by_label("Humør 4").click()
-    fp.get_by_label("Søvn 3").click()
+    check("no Søvn or Energi in the Dagbog (0.2.1)", fp.get_by_label("Søvn 3").count() == 0
+          and fp.get_by_label("Energi 3").count() == 0)
+    fp.get_by_label("Mentalt overskud 3").click()
+    fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Hjemmelavet").click()
+    fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Kage").click()
     fp.get_by_label("Flere").click()
     fp.locator(".hm-tags button", has_text="Sport").click()
     fp.locator(".hm-text").fill("Hemmelig dagbogstekst")
@@ -288,8 +292,9 @@ with sync_playwright() as p:
     check("the family week shows mor's mood", "🙂" in row.inner_text(), row.inner_text())
     row.locator(".hm-cell:not(.hm-empty)").first.click()
     detail = ph.locator(".hm-detail").inner_text()
-    check("the day's detail has ratings and tags, not the text",
-          "Sport" in detail and "Hemmelig" not in detail and "kun for mor" in detail, detail[:160])
+    check("the day's detail has ratings, food and activities, not the text",
+          "Sport" in detail and "Kage" in detail and "Hemmelig" not in detail
+          and "kun for mor" in detail, detail[:200])
     check("mor's text is nowhere on the admin's page", "Hemmelig" not in ph.content())
     ph.screenshot(path=f"{OUT}/11-admin-family-week.png", full_page=True)
     ph.locator(".fm-back").click()

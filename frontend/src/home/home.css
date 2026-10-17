@@ -91,7 +91,7 @@
 .hm-tags button, .hm-tags span { border: 1.5px solid var(--fm-line); background: #fffdf7; border-radius: 999px;
   padding: 8px 14px; font-weight: 700; font-size: 15px; color: var(--fm-ink); }
 .hm-tags button.on { background: var(--fm-olive); border-color: var(--fm-olive); color: var(--fm-cream); }
-.hm-tags-ro { margin-top: 10px; }
+.hm-tags-ro { margin-top: 6px; }
 .hm-tags-ro span { padding: 5px 12px; font-size: 14px; }
 .hm-private { margin: -4px 0 8px; font-size: 14px; color: var(--fm-dim); }
 .hm-text { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--fm-line);
@@ -102,6 +102,12 @@
   font-weight: 700; cursor: pointer; }
 .hm-delete { align-self: center; margin: 4px 0 12px; }
 .hm-save { width: 100%; }
+/* The save bar floats over the form: never see-through, and a band of the
+   background under it so the fields slide away beneath (0.2.1). */
+.hm-page > .fm-bottom { background: linear-gradient(to top, var(--fm-sage) 65%, rgba(152, 171, 140, 0)); }
+.hm-save:disabled { opacity: 1; background: #a9b294; color: rgba(246, 240, 226, .9); box-shadow: none; }
+.hm-hint { margin: -4px 0 10px; font-size: 14px; color: var(--fm-dim); }
+.hm-detail-label { margin: 12px 0 0; font-size: 14px; font-weight: 700; color: var(--fm-dim); }
 
 .hm-week { padding: 12px 10px; overflow-x: auto; }
 .hm-week table { width: 100%; border-collapse: collapse; }

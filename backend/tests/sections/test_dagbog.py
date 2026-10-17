@@ -29,15 +29,19 @@ def _jpeg() -> bytes:
     return buf.getvalue()
 
 
-FULL = {"day": TODAY, "mood": 4, "sleep": 3, "energy": 5, "mental": 2, "food": 4,
+FULL = {"day": TODAY, "mood": 4, "mental": 2, "foods": ["hjemmelavet", "Kage"],
         "alcohol": 2, "tags": ["Sport", "venner"], "highlight": "Vi vandt kampen!"}
 
 
 def test_config_has_every_field_and_the_default_tags(client):
     c = client.get("/api/dagbog/config").json()
-    assert [f["key"] for f in c["fields"]] == ["mood", "sleep", "energy", "mental", "food",
-                                                "alcohol", "tags", "highlight"]
-    assert c["fields"][0]["faces"][4] == "😄" and "Sport" in c["tags"] and c["today"] == TODAY
+    assert [f["key"] for f in c["fields"]] == ["mood", "mental", "foods", "alcohol", "tags",
+                                                "highlight"]                 # 0.2.1: no sleep/energy
+    assert c["fields"][0]["faces"][4] == "😄" and c["today"] == TODAY
+    for t in ("Sport", "Computer", "Fjernsyn", "Vedligehold af hus og have"):
+        assert t in c["tags"]
+    for f in ("Hjemmelavet", "Fastfood", "Kage", "Chips"):
+        assert f in c["foods"]
 
 
 def test_an_entry_round_trip(client):
@@ -45,9 +49,10 @@ def test_an_entry_round_trip(client):
     assert r.status_code == 200, r.text
     e = r.json()["entry"]
     assert (e["mood"], e["alcohol"], e["tags"]) == (4, 2, ["Sport", "Venner"])   # tag case from the list
+    assert e["foods"] == ["Hjemmelavet", "Kage"] and "sleep" not in e and "food" not in e
     assert e["highlight"] == "Vi vandt kampen!" and e["hasPhoto"] is False
     e = client.put("/api/dagbog/entry", json={"day": TODAY, "mood": 2}).json()["entry"]
-    assert e["mood"] == 2 and e["sleep"] is None and e["highlight"] == ""        # a save replaces
+    assert e["mood"] == 2 and e["mental"] is None and e["foods"] == [] and e["highlight"] == ""
     assert client.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"]["mood"] == 2
     assert client.delete(f"/api/dagbog/entry?day={TODAY}").status_code == 200
     assert client.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"] is None
@@ -60,6 +65,7 @@ def test_validation_speaks_danish(client):
                          ({"day": TODAY, "mood": True}, "1-5"),
                          ({"day": TODAY, "alcohol": -1}, "genstande"),
                          ({"day": TODAY, "tags": ["Rumfart"]}, "Ukendt aktivitet"),
+                         ({"day": TODAY, "foods": ["Rumfoder"]}, "Ukendt madtype"),
                          ({"day": "i går"}, "Ugyldig dato"),
                          ({"day": TODAY, "highlight": "x" * 2001}, "for lang")):
         r = client.put("/api/dagbog/entry", json=body)
@@ -94,12 +100,13 @@ def test_the_admin_sets_tags_and_fields_per_person(client):
     s = client.get("/api/dagbog/admin/settings").json()
     uid = next(m["id"] for m in s["members"] if m["username"] == "barn")
     r = client.put("/api/dagbog/admin/settings", json={
-        "tags": ["Skole", " Fodbold ", "skole", ""],
-        "members": {str(uid): ["mood", "sleep", "tags", "highlight"]}})
+        "tags": ["Skole", " Fodbold ", "skole", ""], "foods": ["Pizza", "Grød"],
+        "members": {str(uid): ["mood", "foods", "tags", "highlight"]}})
     assert r.status_code == 200, r.text
-    assert r.json()["tags"] == ["Skole", "Fodbold"]
+    assert r.json()["tags"] == ["Skole", "Fodbold"] and r.json()["foods"] == ["Pizza", "Grød"]
     cfg = barn.get("/api/dagbog/config").json()
-    assert [f["key"] for f in cfg["fields"]] == ["mood", "sleep", "tags", "highlight"]
+    assert [f["key"] for f in cfg["fields"]] == ["mood", "foods", "tags", "highlight"]
+    assert cfg["foods"] == ["Pizza", "Grød"]
     # A field that is off is not stored, even when sent.
     e = barn.put("/api/dagbog/entry", json={"day": TODAY, "mood": 3, "alcohol": 4,
                                             "tags": ["Fodbold"]}).json()["entry"]
@@ -108,6 +115,8 @@ def test_the_admin_sets_tags_and_fields_per_person(client):
     assert barn.put("/api/dagbog/admin/settings", json={"tags": []}).status_code == 403
     assert client.put("/api/dagbog/admin/settings",
                       json={"members": {str(uid): ["nonsense"]}}).status_code == 400
+    assert client.put("/api/dagbog/admin/settings",
+                      json={"members": {str(uid): ["sleep"]}}).status_code == 400     # gone in 0.2.1
 
 
 def test_deleting_an_account_removes_its_days_and_photos(client):
@@ -130,3 +139,22 @@ def test_the_family_overview_range_is_bounded(client):
     assert client.get(f"/api/dagbog/family?frm={TODAY}&to={YESTERDAY}").status_code == 400
     mine = client.get(f"/api/dagbog/mine?frm={YESTERDAY}&to={TODAY}").json()
     assert mine == {"days": []}
+
+
+def test_migration_2_keeps_hand_set_food_and_adds_the_column(fresh_db):
+    """A database from 0.2.0: a person with "food" chosen by hand gets
+    "foods"; the old values stay in their columns but are not sent."""
+    import json
+    from app.core import auth, db
+    from app.sections.dagbog import _m002_foods, dagbog
+    u = auth.create_user("mor", "familie-kode-1", "family")
+    with db.connect() as con:
+        con.execute("INSERT INTO dagbog_members (user_id, fields) VALUES (?, ?)",
+                    (u["id"], json.dumps(["mood", "sleep", "food"])))
+        con.execute("INSERT INTO dagbog_entries (user_id, day, mood, sleep, food, tags, highlight,"
+                    " created_at, updated_at) VALUES (?, ?, 3, 4, 5, '[]', '', 'x', 'x')",
+                    (u["id"], TODAY))
+        _m002_foods(con)                                  # idempotent: the column exists already
+    assert dagbog.fields_for(u["id"]) == ["mood", "foods"]
+    e = dagbog.get_entry(u["id"], TODAY)
+    assert e["mood"] == 3 and e["foods"] == [] and "sleep" not in e
