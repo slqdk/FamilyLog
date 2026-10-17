@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Wordmark } from '../sections/familymap/phone/art';
 import type { FmUser } from '../sections/familymap/phone/types';
-import { homeApi } from './api';
+import { homeApi, type CyState, type OkState } from './api';
 import { Chat } from './Chat';
+import { CyklusCalendar, CyklusDayPage, CyklusPage, CyklusShare, cyklusTileLine } from './Cyklus';
 import { DagbogPage, FamilyWeek } from './Dagbog';
+import { OkonomiPage } from './Okonomi';
 import { parseRoute, routeHash, todayLocal, type HomeRoute } from './logic';
 
 /** The front page (FamilyLog 0.2.0): for everyone in the family, on the
@@ -45,6 +47,11 @@ export function HomeApp() {
 
   if (route.name === 'dagbog') return <DagbogPage day={route.day ?? todayLocal()} />;
   if (route.name === 'family') return <FamilyWeek me={me} week={route.week} />;
+  if (route.name === 'okonomi') return <OkonomiPage month={route.month} />;
+  if (route.name === 'cyklus') return <CyklusPage />;
+  if (route.name === 'cyklusDay') return <CyklusDayPage day={route.day} />;
+  if (route.name === 'cyklusCal') return <CyklusCalendar month={route.month} />;
+  if (route.name === 'cyklusShare') return <CyklusShare />;
   return <Home me={me} name={name} atlas={atlas} onSignOut={signOut} />;
 }
 
@@ -105,15 +112,20 @@ function Home({ me, name, atlas, onSignOut }: {
   );
 }
 
-/** The way into the rest. Økonomi is each grown-up's own bank data, so a
-    family account does not get the tile (nor the API). */
-export function Shortcuts({ me, atlas }: { me: FmUser; atlas: string }) {
+/** The way into the rest. Økonomi (0.3.0) for the grown-ups' accounts and
+    the family accounts the administrator gave access; Cyklus for accounts
+    set to female, and for anyone a woman shares hers with. */
+export function Shortcuts({ me: _me, atlas }: { me: FmUser; atlas: string }) {
   const [filled, setFilled] = useState<boolean | null>(null);
+  const [ok, setOk] = useState<OkState | null>(null);
+  const [cy, setCy] = useState<CyState | null>(null);
   useEffect(() => {
     const t = todayLocal();
     homeApi.mine(t, t).then((r) => setFilled(r.days.includes(t))).catch(() => setFilled(null));
+    homeApi.okState().then(setOk).catch(() => setOk(null));
+    homeApi.cyState().then(setCy).catch(() => setCy(null));
   }, []);
-  const grownUp = me.role === 'admin' || me.role === 'user';
+  const cyLine = cy && (cy.enabled || cy.shared.length > 0) ? cyklusTileLine(cy) : null;
   return (
     <nav className="hm-tiles" aria-label="Genveje">
       <a className="hm-tile" href="/fm/">
@@ -128,11 +140,18 @@ export function Shortcuts({ me, atlas }: { me: FmUser; atlas: string }) {
           {filled ? 'I dag ✓' : filled === false ? 'Hvordan var i dag?' : 'Din dag'}
         </span>
       </a>
-      {grownUp && (
-        <a className="hm-tile" href="/app/#ledger">
+      {ok?.access && (
+        <a className="hm-tile" href={routeHash({ name: 'okonomi', month: null })}>
           <span className="hm-tile-icon" aria-hidden>💰</span>
           <span className="hm-tile-name">Økonomi</span>
-          <span className="hm-tile-sub">Konti og forbrug</span>
+          <span className="hm-tile-sub">{ok.own ? 'Konti og forbrug' : `${ok.owner}s forbrug`}</span>
+        </a>
+      )}
+      {cyLine !== null && (
+        <a className="hm-tile hm-tile-cy" href={routeHash({ name: 'cyklus' })}>
+          <span className="hm-tile-icon" aria-hidden>🌸</span>
+          <span className="hm-tile-name">Cyklus</span>
+          <span className="hm-tile-sub">{cyLine}</span>
         </a>
       )}
     </nav>
@@ -153,6 +172,7 @@ function Menu({ me, onClose, onSignOut, onNewChat }: {
         <a className="fm-drawer-item" href={routeHash({ name: 'dagbog', day: null })} onClick={onClose}>Min dagbog</a>
         <a className="fm-drawer-item" href={routeHash({ name: 'family', week: null })} onClick={onClose}>Familiens uge</a>
         <a className="fm-drawer-item" href="/fm/">Alf’s Atlas</a>
+        {me.gender === 'female' && <a className="fm-drawer-item" href={routeHash({ name: 'cyklus' })} onClick={onClose}>Cyklus</a>}
         {me.role !== 'family' && <a className="fm-drawer-item" href="/app/">Admin-appen</a>}
         {me.role === 'admin' && <a className="fm-drawer-item" href="/app/#settings">Indstillinger</a>}
         <button className="fm-drawer-item fm-drawer-out" onClick={() => { onClose(); onSignOut(); }}>Log ud</button>

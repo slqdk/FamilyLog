@@ -30,7 +30,7 @@ def test_a_list_out_of_order_is_refused():
 
 def test_sections_come_from_the_registry(client):
     ids = [s["id"] for s in client.get("/api/sections").json()]
-    assert ids == ["ledger", "familymap", "chat", "dagbog"]
+    assert ids == ["ledger", "familymap", "chat", "dagbog", "cyklus"]
 
 
 def test_the_admin_makes_users_and_family_accounts(client):

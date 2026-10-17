@@ -2,6 +2,42 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.0 - 2026-10-17
+
+Økonomi for the family, on the phone, and Cyklus.
+
+**ACTION REQUIRED**:
+1. `cd /opt/familylog && bash update.sh` (migrations: a gender per account,
+   Økonomi read access, the Cyklus tables).
+2. Settings → Accounts: set **gender** on each account (female gets
+   Cyklus), and for a family account that should see Økonomi pick
+   **Økonomi: reads <name>'s**.
+
+- **Økonomi on the front page** (green, for the phone): one month at a
+  time - spent, against a normal month (the six before), a bar per day,
+  categories with their transactions, the biggest receivers, fixed costs -
+  and Alf to ask. Read only. The tile now opens this page; import and
+  categories are still in the admin app (linked at the bottom).
+- **Family access to Økonomi, per person**: the administrator picks which
+  family account reads which Økonomi. A family account still cannot reach
+  the admin app's Økonomi API at all; its Alf answers live in its own slot
+  and are dropped when the access changes or the owner clears the ledger.
+- **Gender per account** (not set / female / male).
+- **Cyklus** for accounts set to female, in its own soft pink look: a week
+  strip, "Menstruationsdag 1" / "Menstruation om 9 dage", one tap for "it
+  started / ended today" (or another day), a day log (bleeding, symptoms,
+  mood, a private note), insights (phase, next period, fertile days, what
+  she usually feels in this phase and her Dagbog mood then), a month
+  calendar with predictions, and her cycle history (average cycle and
+  period, regular or not, edit and delete).
+- **She decides who sees it** (Cyklus → Deling): per account; status only
+  by default, the fertile days and her day's symptoms/mood/patterns only if
+  she ticks them. Nobody else sees anything - the administrator included -
+  and the note is never shared. Unshared fertile days read as the phase
+  around them, so no label gives them away.
+- The admin app's palette is the front page's sage and olive now.
+- Four tiles on the front page sit two by two on a phone.
+
 ## 0.2.2 - 2026-10-17
 
 **ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.

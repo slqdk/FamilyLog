@@ -69,10 +69,23 @@ def _m001_ledger(con: sqlite3.Connection) -> None:
     """)
 
 
+def _m002_viewers(con: sqlite3.Connection) -> None:
+    """0.3.0: a family account the administrator gives read access to one
+    admin/user account's Økonomi (on the phone page)."""
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS ledger_viewers (
+            user_id  INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE
+        );
+    """)
+
+
 SECTION = Section(
     id="ledger",
     title="Økonomi",
     router=router,
-    migrations=[(1, "ledger tables (SLQ _m048)", _m001_ledger)],
+    migrations=[(1, "ledger tables (SLQ _m048)", _m001_ledger),
+                (2, "family read access", _m002_viewers)],
+    family_prefixes=("/api/okonomi/",),
     reset=ledger_ask.reset,
 )

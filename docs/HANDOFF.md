@@ -5,6 +5,46 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.0 - Start here
+
+**Gender**: core migration 2 adds `users.gender` ('' | female | male);
+`user_dto` carries it, so `request.state.user["gender"]` is live per request.
+`PATCH /api/users/{uid}` (admin) sets it; `POST /api/users` takes it too.
+
+**Økonomi read access**: ledger migration 2 `ledger_viewers(user_id PK,
+owner_id)` - family account → one admin/user ledger. `ledger.ledger_for(me)`
+decides whose ledger the phone page reads. The phone API is
+`ledger/okonomi_routes.py` under `/api/okonomi/` (the ledger section's
+`family_prefixes`); `/api/ledger/*` stays closed to family. `ledger_ask.submit`
+takes `ledger_uid`: the ask slot is the asker's, the search the owner's
+(`a["_ledger"]`). `okonomi_routes._ask` drops an answer whose ledger is not
+the one the person may read now; `PUT /api/ledger/viewers` and clearing the
+ledger forget viewers' asks too (review finding).
+
+**Cyklus** (`sections/cyklus/`): `predict.py` is pure calendar arithmetic
+(tested on its own): averages of the last six plausible cycles (15-60 days)
+else her setting else 28; ovulation 14 days before the next start; fertile
+= ovulation -5..+1; PMS = last 5 days; an un-ended period counts to her
+usual length or the last flow day logged (max 10); 75+ days without a
+start = `stale`, no forecast. `cyklus.py` holds the DB, validation, Danish
+texts (`PHASES`) and `shared_with(viewer)` - the only path to another
+person's cycle; it returns status always, fertile only with
+`share_fertile`, today's log and symptom patterns only with
+`share_details`, never the note or her Dagbog averages. Unshared fertile
+days map to follicular/luteal. All own endpoints need gender female.
+Frontend: `src/home/Cyklus.tsx` (`.cy-*` classes in home.css, own pink
+tokens on `.cy-page`), `src/home/Okonomi.tsx` (`.ok-*`). Routes
+`#/okonomi[/YYYY-MM]`, `#/cyklus`, `#/cyklus/dag/<day>`,
+`#/cyklus/kalender[/<month>]`, `#/cyklus/deling`.
+
+An independent review (privacy) found the "mid" label leak, stale Alf
+answers after an access change, Dagbog averages in the shared pattern,
+loose bool/list parsing and the "150 days late" case; all fixed with
+regression tests. Known limit: the admin can reset a password and sign in
+as her (said in HELP).
+
+---
+
 ## 0.2.2 - Start here
 
 `mental` is now 1-10: `SCALES` entries carry `max` (mood 5, mental 10),

@@ -2,15 +2,16 @@
    ported Økonomi and FamilyMap pages look as they did there. */
 
 :root {
-  --bg: #f7f4ee;
-  --bg-panel: #ffffff;
-  --bg-raised: #efe9df;
-  --line: #ddd6ca;
-  --text: #2a2622;
-  --text-dim: #6b645b;
-  --accent: #c2703a;       /* warm amber */
-  --accent-soft: #f0e2d4;
-  --accent-text: #1a120a;
+  /* 0.3.0: the front page's sage and olive (Alf's Atlas), not SLQ's amber. */
+  --bg: #eef1e7;
+  --bg-panel: #fbfaf5;
+  --bg-raised: #e3e8d8;
+  --line: #d2d9c4;
+  --text: #2b2d24;
+  --text-dim: #646957;
+  --accent: #6c7b4b;       /* olive */
+  --accent-soft: #e1e8d1;
+  --accent-text: #fbf8f0;
   --ollama: #4f8a6b;       /* green: done, connected */
   --danger: #c8554f;
   --radius: 10px;
@@ -21,14 +22,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1b1916;
-    --bg-panel: #23201c;
-    --bg-raised: #2c2823;
-    --line: #3b362f;
-    --text: #ece6dc;
-    --text-dim: #a59c8f;
-    --accent: #d9874f;
-    --accent-soft: #3a2a1d;
+    --bg: #171a15;
+    --bg-panel: #1f231c;
+    --bg-raised: #283023;
+    --line: #353e2e;
+    --text: #e8ebdf;
+    --text-dim: #9ea590;
+    --accent: #a3b77c;
+    --accent-soft: #2e3824;
+    --accent-text: #141810;
     --ollama: #6fb38e;
     --danger: #e0706a;
     color-scheme: dark;
@@ -137,6 +139,7 @@ textarea { resize: vertical; }
                 flex-wrap: wrap; }
 .user-name { font-weight: 600; font-size: 13px; }
 .user-role { font-size: 12px; color: var(--text-dim); flex: 1 1 auto; }
+.user-pick { width: auto; font-size: 12px; padding: 4px 6px; }
 .user-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(127,127,127,.4); }
 .user-dot.on { background: var(--ollama); }
 

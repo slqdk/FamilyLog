@@ -287,6 +287,7 @@ function SearchGroup({ value, set, pinned, keySet }: { value: Value; set: Setter
 
 function AccountsGroup({ meId }: { meId: number }) {
   const [users, setUsers] = useState<UserDto[]>([]);
+  const [viewers, setViewers] = useState<Map<number, number>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -294,7 +295,12 @@ function AccountsGroup({ meId }: { meId: number }) {
   const [role, setRole] = useState<'user' | 'family'>('user');
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
-  const load = useCallback(() => { api.users().then(setUsers).catch((e) => setError((e as Error).message)); }, []);
+  const load = useCallback(() => {
+    api.users().then(setUsers).catch((e) => setError((e as Error).message));
+    api.economyViewers().then((v) => setViewers(new Map(v.map((x) => [x.userId, x.ownerId]))))
+      .catch((e) => setError((e as Error).message));
+  }, []);
+  const owners = users.filter((u) => u.role !== 'family');
   useEffect(load, [load]);
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
@@ -305,14 +311,31 @@ function AccountsGroup({ meId }: { meId: number }) {
 
   return (
     <Group title="Accounts" help="settings.accounts">
-      <p className="settings-note">Family accounts sign in on the family page (/fm/) only and do not count
-        towards the account limit.</p>
+      <p className="settings-note">Family accounts use the front page (/) and Alf's Atlas only and do not count
+        towards the account limit. A family account can be given read-only access to one person's Økonomi.
+        Accounts set to female get Cyklus; what she shares, she decides herself.</p>
       <ul className="user-list">
         {users.map((u) => (
           <li key={u.id}>
             <span className={`user-dot${u.online ? ' on' : ''}`} title={u.online ? 'Signed in' : 'Not signed in'} />
             <span className="user-name">{u.username}</span>
             <span className="user-role">{u.role}{u.id === meId ? ' (you)' : ''}</span>
+            <select className="user-pick" aria-label={`Gender of ${u.username}`} value={u.gender ?? ''}
+                    title="Accounts set to female get Cyklus on the front page"
+                    onChange={(e) => void run(() => api.setGender(u.id, e.target.value), `${u.username} updated.`)}>
+              <option value="">gender: not set</option>
+              <option value="female">female</option>
+              <option value="male">male</option>
+            </select>
+            {u.role === 'family' && (
+              <select className="user-pick" aria-label={`Økonomi for ${u.username}`} value={viewers.get(u.id) ?? ''}
+                      title="Read-only Økonomi on the front page"
+                      onChange={(e) => void run(() => api.setEconomyViewer(u.id, e.target.value ? Number(e.target.value) : null),
+                        e.target.value ? `${u.username} can now read that Økonomi.` : `${u.username} no longer sees Økonomi.`)}>
+                <option value="">Økonomi: no</option>
+                {owners.map((o) => <option key={o.id} value={o.id}>Økonomi: reads {o.username}'s</option>)}
+              </select>
+            )}
             {resetFor === u.id ? (
               <>
                 <input type="password" className="fma-inline" placeholder="New password (10+)"

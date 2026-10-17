@@ -33,12 +33,28 @@ FamilyMap is shown to the administrator only.
 title: Front page
 where: Top bar
 since: 0.2.0
+changed: 0.3.0
 
 Opens the front page at **/** - what everyone in the family sees on the
-phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog and (for the
-administrator and user accounts) Økonomi. Family accounts land there when
-they sign in and can reach nothing in this admin app. On a phone, "Add to
-home screen" makes it an app icon.
+phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
+Cyklus. Family accounts land there when they sign in and can reach nothing
+in this admin app. On a phone, "Add to home screen" makes it an app icon.
+
+**Økonomi** on the front page is read only: one month at a time (what went
+out, per category against a normal month, the biggest receivers, fixed
+costs) and Alf to ask. Administrator and user accounts see their own;
+a family account sees the one the administrator chose under Settings →
+Accounts, or none. Importing and categories stay here in the admin app.
+
+**Cyklus** is for accounts set to female (Settings → Accounts): a period
+log with symptoms, mood and a note, the cycle day and phase, the next
+period, the fertile window, PMS days, and her own patterns per phase. It is
+a calendar estimate, not contraception. She chooses under **Deling** who
+sees her status (phase, cycle day, next period) and whether they also see
+the fertile days and her day's symptoms and mood. Nobody else sees
+anything - the administrator included - and her note is never shared.
+(An administrator who resets her password could sign in as her; that is
+the one limit no app can close.)
 
 ## app.settings
 title: Settings
@@ -147,11 +163,18 @@ exports. The container's `APP_TIMEZONE` pins it.
 title: Accounts
 where: Settings
 since: 0.1.0
+changed: 0.3.0
 
 Everyone who can sign in. **user** accounts use the app (each has their own
 Økonomi); at most 3 accounts in all for administrator and users. **family**
-accounts sign in on the family page only and do not count towards the
-limit (FamilyMap → Family accounts lists them too). **Password** sets a new
+accounts use the front page and Alf's Atlas only and do not count towards
+the limit (FamilyMap → Family accounts lists them too).
+
+**gender**: an account set to *female* gets Cyklus on the front page.
+**Økonomi** (family accounts only): *reads <name>'s* gives read-only access
+to that account's Økonomi on the front page - the month, the transactions
+and asking Alf; never import, categories or clearing. Changing or removing
+it also drops the answer Alf last gave that person. **Password** sets a new
 one and signs that person out; **Sign out** ends their sessions;
 **Delete** removes the login - their FamilyMap reviews stay, shown as
 "slettet bruger".

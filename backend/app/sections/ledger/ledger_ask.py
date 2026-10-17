@@ -185,16 +185,22 @@ def view(user_id: int) -> dict | None:
     return out
 
 
-def submit(user_id: int, question: str, model: str | None = None) -> dict:
-    """Queue a question. Must be called from a running event loop."""
+def submit(user_id: int, question: str, model: str | None = None,
+           ledger_uid: int | None = None) -> dict:
+    """Queue a question. Must be called from a running event loop.
+
+    `user_id` is who asks (their one ask slot and queue place);
+    `ledger_uid` whose ledger is searched - another account's for a family
+    member given read access to it (0.3.0), else the asker's own."""
+    lu = ledger_uid if ledger_uid is not None else user_id
     question = " ".join(str(question or "").split())
     if not question:
         raise ledger.Invalid("Write a question.")
     if len(question) > MAX_QUESTION:
         raise ledger.Invalid(f"The question is too long (at most {MAX_QUESTION} characters).")
-    if ledger.summary(user_id)["count"] == 0:
+    if ledger.summary(lu)["count"] == 0:
         raise ledger.Invalid("Import a bank export first (Import).")
-    model = model or ledger.get_settings(user_id)["model"]
+    model = model or ledger.get_settings(lu)["model"]
     if not model:
         raise ledger.Invalid("No model chosen - pick one beside the question box, "
                              "or set the chat model in Settings.")
@@ -208,7 +214,7 @@ def submit(user_id: int, question: str, model: str | None = None) -> dict:
     a = {"question": question, "model": model, "state": "queued", "step": "Waiting for the card…",
          "text": "", "spec": None, "counted": None, "result": None, "error": None,
          "startedAt": db_now(), "finishedAt": None, "previous": prev["question"] if prev else None,
-         "_gen": gen, "_prev": prev}
+         "_gen": gen, "_prev": prev, "_ledger": lu}
     _asks[user_id] = a
 
     def factory():
@@ -288,6 +294,7 @@ def result_context(question: str, spec: dict, res: dict, summary: dict) -> str:
 
 async def run(user_id: int, a: dict) -> None:
     model = a["model"]
+    user_id = a.get("_ledger", user_id)          # whose ledger is searched
     try:
         a["state"], a["step"] = "working", "Understanding the question…"
         system, user = _understand_input(user_id, a["question"], a.get("_prev"))
@@ -492,6 +499,26 @@ def stop_categorise(user_id: int) -> dict:
         if task is not None and not task.done():
             task.cancel()
     return cat_view(user_id)
+
+
+def ledger_of(user_id: int) -> int | None:
+    """Whose ledger this person's latest ask searched (0.3.0)."""
+    a = _asks.get(user_id)
+    return a.get("_ledger", user_id) if a else None
+
+
+def forget(user_id: int) -> None:
+    """Drop a person's ask - stopped first if it is running. Used when a
+    family account's Økonomi access changes, so an answer about one
+    ledger never outlives the access to it."""
+    stop(user_id)
+    _asks.pop(user_id, None)
+
+
+def forget_viewers_of(ledger_uid: int) -> None:
+    """Other people's asks about this ledger (it was cleared)."""
+    for uid in [u for u, a in _asks.items() if u != ledger_uid and a.get("_ledger") == ledger_uid]:
+        forget(uid)
 
 
 def reset(user_id: int | None = None) -> None:

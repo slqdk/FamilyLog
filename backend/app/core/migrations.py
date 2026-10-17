@@ -48,8 +48,15 @@ def _c001_auth(con: sqlite3.Connection) -> None:
     con.executescript(auth.AUTH_SCHEMA)
 
 
+def _c002_gender(con: sqlite3.Connection) -> None:
+    """0.3.0: a gender per account ('' = not set, 'female', 'male'). The
+    cycle section is for accounts set to female."""
+    add_column(con, "users", "gender", "TEXT NOT NULL DEFAULT ''")
+
+
 CORE: list[tuple[int, str, callable]] = [
     (1, "users and sessions", _c001_auth),
+    (2, "gender per account", _c002_gender),
 ]
 
 

@@ -93,6 +93,7 @@ export interface FmUser {
   id: number;
   username: string;
   role: string;
+  gender?: string;
   createdAt?: string;
   online?: boolean;
 }

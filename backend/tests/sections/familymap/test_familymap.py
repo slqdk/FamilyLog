@@ -52,16 +52,18 @@ def test_every_api_route_outside_fm_refuses_family(client):
     """Not a sample: every registered /api route, by the middleware rule.
 
     FamilyLog 0.2.0: the family's API is the family page's (/api/fm/), the
-    front page's chat (/api/chat/) and the Dagbog (/api/dagbog/). Routes are
+    front page's chat (/api/chat/) and the Dagbog (/api/dagbog/); 0.3.0 adds the
+    phone Økonomi (/api/okonomi/, read-only, per account) and Cyklus. Routes are
     read from the OpenAPI schema: FastAPI 0.14x keeps included routers out
     of app.routes, so the old loop never saw a section's routes at all."""
     from app.core import auth
     from app.main import app
-    family_api = ("/api/fm/", "/api/chat/", "/api/dagbog/")
+    family_api = ("/api/fm/", "/api/okonomi/", "/api/chat/", "/api/dagbog/", "/api/cyklus/")
     assert auth.family_prefixes() == family_api
     paths = set(app.openapi()["paths"]) | {getattr(r, "path", "") for r in app.routes}
     api = sorted(p for p in paths if p.startswith("/api/"))
     assert len(api) > 60 and "/api/ledger/summary" in api and "/api/chat/send" in api
+    assert "/api/okonomi/month" in api and "/api/cyklus/state" in api
     fam_user = {"id": 99, "role": "family"}
     for path in api:
         allowed = auth.family_allows(fam_user, path)

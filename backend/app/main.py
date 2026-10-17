@@ -160,6 +160,11 @@ class CreateUserBody(BaseModel):
     username: str
     password: str
     role: str = "user"
+    gender: str = ""
+
+
+class UserPatch(BaseModel):
+    gender: str | None = None
 
 
 @app.post("/api/users")
@@ -171,10 +176,29 @@ def create_user(body: CreateUserBody, request: Request):
         raise HTTPException(400, "Role must be user or family.")
     if body.role == "user" and auth.account_count() >= auth.MAX_USERS:
         raise HTTPException(400, f"Limit is {auth.MAX_USERS} accounts (family accounts not counted).")
+    if body.gender not in auth.GENDERS:
+        raise HTTPException(400, "Gender must be female, male or empty.")
     try:
-        return auth.create_user(body.username, body.password, body.role)
+        u = auth.create_user(body.username, body.password, body.role)
     except ValueError as exc:
         raise HTTPException(400, str(exc))
+    return auth.set_gender(u["id"], body.gender) if body.gender else u
+
+
+@app.patch("/api/users/{uid}")
+def update_user(uid: int, body: UserPatch, request: Request):
+    """The administrator sets an account's gender (0.3.0: the cycle section
+    is for accounts set to female)."""
+    require_admin(request)
+    if auth.get_user(uid) is None:
+        raise HTTPException(404, "No such account.")
+    out = auth.get_user(uid)
+    if body.gender is not None:
+        try:
+            out = auth.set_gender(uid, body.gender)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc))
+    return out
 
 
 @app.patch("/api/users/{uid}/password")

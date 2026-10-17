@@ -26,6 +26,7 @@ SESSION_COOKIE = f"{APP_ID}_session"
 MAX_USERS = 3               # admin + user accounts; family does not count
 FAMILY_ROLE = "family"
 ROLES = ("admin", "user", FAMILY_ROLE)
+GENDERS = ("", "female", "male")          # '' = not set (0.3.0)
 # The API a family account may call. Sections add theirs through the
 # registry (Section.family_prefixes); FamilyMap's phone page is /api/fm/.
 FAMILY_API_PREFIX = "/api/fm/"
@@ -87,7 +88,9 @@ def password_problem(password: str) -> str | None:
 # ---- users ----------------------------------------------------------------
 
 def user_dto(r) -> dict:
+    keys = r.keys()
     return {"id": r["id"], "username": r["username"], "role": r["role"],
+            "gender": (r["gender"] or "") if "gender" in keys else "",
             "createdAt": r["created_at"]}
 
 
@@ -148,6 +151,18 @@ def create_user(username: str, password: str, role: str) -> dict:
             "INSERT INTO users (username, password_hash, role, created_at) VALUES (?,?,?,?)",
             (username, hash_password(password), role, db.utcnow()))
         r = con.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
+    return user_dto(r)
+
+
+def set_gender(uid: int, gender: str) -> dict:
+    gender = (gender or "").strip().lower()
+    if gender not in GENDERS:
+        raise ValueError("Gender must be female, male or empty.")
+    with db.connect() as con:
+        con.execute("UPDATE users SET gender=? WHERE id=?", (gender, uid))
+        r = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if r is None:
+        raise LookupError("No such account.")
     return user_dto(r)
 
 

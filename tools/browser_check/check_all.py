@@ -149,8 +149,9 @@ with sync_playwright() as p:
           page.locator(".led-model select option").first.inner_text() == "Settings: qwen3.6:27b")
     page.locator(".led-ask-box textarea").fill("How much have I spent at Davidsens?")
     page.locator(".led-ask-row .primary-btn").click()
+    # Behind the categorise batches in the one queue - give it time (it timed out now and then at 20 s).
     wait_until(page, lambda: page.locator(".led-counted").count() > 0
-               and page.locator(".led-ask-row .primary-btn").count() > 0)
+               and page.locator(".led-ask-row .primary-btn").count() > 0, timeout_ms=90000)
     counted = page.locator(".led-counted").inner_text() if page.locator(".led-counted").count() else ""
     check("answer counted by the app", "18 transactions" in counted, counted[:160])
     check("answer text from the mock", "From the ledger:" in page.locator(".led-md").inner_text())
@@ -286,6 +287,7 @@ with sync_playwright() as p:
     ph.request.post(BASE + "/api/auth/login", data={"username": "admin", "password": "test-password-1"})
     ph.goto(BASE + "/")
     ph.wait_for_selector(".hm-tiles")
+    wait_until(ph, lambda: ph.locator(".hm-tile-name", has_text="Økonomi").count() == 1)
     tiles = ph.locator(".hm-tile-name").all_inner_texts()
     check("the admin's tiles include Økonomi", "Økonomi" in tiles, str(tiles))
     # The admin sees mor's day in the family week - and never her text.
@@ -303,10 +305,21 @@ with sync_playwright() as p:
     ph.screenshot(path=f"{OUT}/11-admin-family-week.png", full_page=True)
     ph.locator(".fm-back").click()
     ph.wait_for_selector(".hm-tiles")
+    # ---- Økonomi on the phone (0.3.0) -------------------------------------------------------
     ph.locator(".hm-tile", has_text="Økonomi").click()
-    ph.wait_for_url("**/app/#ledger")
+    ph.wait_for_selector(".ok-hero", timeout=15000)
+    check("the Økonomi tile opens the phone page", "#/okonomi" in ph.url and "kr" in ph.locator(".ok-hero-num").inner_text(),
+          ph.url)
+    check("the owner is pointed to import in the admin app", ph.locator(".ok-foot a", has_text="admin-appen").count() == 1)
+    ph.locator(".ok-cat").first.click()
+    ph.wait_for_selector(".ok-tx-row", timeout=10000)
+    check("a category opens its transactions", ph.locator(".ok-tx-row").count() > 0)
+    sw = ph.evaluate("document.documentElement.scrollWidth")
+    check("phone Økonomi fits the phone", sw <= 390, f"scrollWidth {sw}")
+    ph.screenshot(path=f"{OUT}/12-okonomi-phone.png", full_page=True)
+    ph.goto(BASE + "/app/#ledger")
     ph.wait_for_selector(".led-tile, .led-empty, .led-ask-box", timeout=15000)
-    check("the Økonomi tile opens Økonomi in the admin app", ph.locator(".nav-btn.active").inner_text() == "Økonomi")
+    check("the admin app still has Økonomi", ph.locator(".nav-btn.active").inner_text() == "Økonomi")
     for label, open_ in (("Økonomi", lambda: ph.locator(".subnav-btn", has_text="Overview").click()),
                          ("Settings", lambda: ph.get_by_role("button", name="Settings").click())):
         open_()
@@ -314,6 +327,94 @@ with sync_playwright() as p:
         sw = ph.evaluate("document.documentElement.scrollWidth")
         check(f"{label} fits a phone", sw <= 390, f"scrollWidth {sw}")
         ph.screenshot(path=f"{OUT}/07-phone-{label.lower()}.png", full_page=True)
+
+    # ---- the administrator sets mor to female and gives her Økonomi (Settings → Accounts) ----
+    page.goto(BASE + "/app/#settings")
+    page.reload()
+    row = page.locator("[data-help='settings.accounts'] .user-list li", has_text="mor")
+    row.wait_for(timeout=15000)
+    row.locator("select[aria-label='Gender of mor']").select_option("female")
+    page.wait_for_selector("text=mor updated.")
+    row.locator("select[aria-label='Økonomi for mor']").select_option(label="Økonomi: reads admin's")
+    page.wait_for_selector("text=mor can now read that Økonomi.")
+    check("Accounts sets gender and Økonomi access",
+          row.locator("select[aria-label='Gender of mor']").input_value() == "female")
+    page.screenshot(path=f"{OUT}/13-accounts.png", full_page=True)
+
+    # ---- mor: Økonomi read-only, and her Cyklus ----------------------------------------------
+    fp.goto(BASE + "/")
+    fp.wait_for_selector(".hm-tile")
+    wait_until(fp, lambda: fp.locator(".hm-tile-name", has_text="Cyklus").count() == 1)
+    tiles = fp.locator(".hm-tile-name").all_inner_texts()
+    check("mor's tiles now include Økonomi and Cyklus", tiles == ["Alf’s Atlas", "Dagbog", "Økonomi", "Cyklus"], str(tiles))
+    fp.screenshot(path=f"{OUT}/14-home-four-tiles.png")
+    fp.locator(".hm-tile", has_text="Økonomi").click()
+    fp.wait_for_selector(".ok-hero", timeout=15000)
+    check("mor reads admin's Økonomi, read only", "admins økonomi" in fp.locator(".ok-whose").inner_text()
+          and fp.locator(".ok-foot").count() == 0)
+    fp.locator(".ok-ask-row input").fill("Hvor meget hos Davidsens?")
+    fp.get_by_role("button", name="Spørg").click()
+    wait_until(fp, lambda: fp.locator(".ok-answer .md").count() > 0 and fp.locator(".ok-answer .ok-note").count() > 0)
+    check("mor asks Alf about the shared Økonomi", "From the ledger:" in fp.locator(".ok-answer").inner_text(),
+          fp.locator(".ok-answer").inner_text()[:160])
+    check("mor still cannot reach the owner's API", fp.request.get(BASE + "/api/ledger/summary").status == 403
+          and fp.request.delete(BASE + "/api/ledger").status == 403)
+    fp.screenshot(path=f"{OUT}/15-okonomi-mor.png", full_page=True)
+
+    import datetime as _dt
+    today = _dt.date.today()
+    fp.goto(BASE + "/#/cyklus")
+    fp.wait_for_selector(".cy-hero", timeout=15000)
+    check("Cyklus starts empty", "Velkommen" in fp.locator(".cy-big").inner_text())
+    fp.get_by_role("button", name="En anden dag…").click()
+    fp.locator(".cy-otherday input[type=date]").fill((today - _dt.timedelta(days=30)).isoformat())
+    fp.locator(".cy-otherday button").click()
+    wait_until(fp, lambda: "Menstruation" in fp.locator(".cy-big").inner_text() or "forsinket" in fp.locator(".cy-big").inner_text())
+    fp.get_by_role("button", name="Menstruationen startede i dag").click()
+    wait_until(fp, lambda: fp.locator(".cy-big").inner_text() == "Menstruationsdag 1")
+    check("a period started today: Menstruationsdag 1", fp.locator(".cy-big").inner_text() == "Menstruationsdag 1",
+          fp.locator(".cy-big").inner_text())
+    check("the week strip marks today as a period day", fp.locator(".cy-strip .cy-today.cy-period").count() == 1)
+    check("her cycles: 30 days measured", "30" in fp.locator(".cy-avgs").inner_text())
+    sw = fp.evaluate("document.documentElement.scrollWidth")
+    check("Cyklus fits the phone", sw <= 390, f"scrollWidth {sw}")
+    fp.screenshot(path=f"{OUT}/16-cyklus.png", full_page=True)
+    fp.locator(".cy-actions a", has_text="Log i dag").click()
+    fp.wait_for_selector(".cy-chips button")
+    fp.locator(".cy-chips button", has_text="Kraftig").click()
+    fp.locator(".cy-chips button", has_text="Kramper").click()
+    fp.locator(".cy-chips button", has_text="Følsom").click()
+    fp.locator(".cy-text").fill("Hemmelig cyklusnote")
+    fp.get_by_role("button", name="Gem dagen").click()
+    wait_until(fp, lambda: "Gemt" in fp.locator(".cy-save").inner_text())
+    check("her day is saved", "Gemt" in fp.locator(".cy-save").inner_text())
+    fp.screenshot(path=f"{OUT}/17-cyklus-day.png", full_page=True)
+    fp.goto(BASE + "/#/cyklus/kalender")
+    fp.wait_for_selector(".cy-cal-grid .cy-period", timeout=10000)
+    check("the calendar shows logged and predicted periods",
+          fp.locator(".cy-cal-grid .cy-period").count() >= 1)
+    fp.screenshot(path=f"{OUT}/18-cyklus-calendar.png", full_page=True)
+    # Nobody sees anything before she shares - the admin included.
+    check("before sharing the admin sees no cycle",
+          ph.request.get(BASE + "/api/cyklus/state").json()["shared"] == [])
+    fp.goto(BASE + "/#/cyklus/deling")
+    fp.wait_for_selector(".cy-checks")
+    fp.locator(".cy-checks label", has_text="admin").locator("input").check()
+    fp.wait_for_selector("text=Gemt ✓")
+    fp.screenshot(path=f"{OUT}/19-cyklus-share.png", full_page=True)
+
+    ph.goto(BASE + "/")
+    ph.wait_for_selector(".hm-tile")
+    wait_until(ph, lambda: ph.locator(".hm-tile", has_text="Cyklus").count() == 1)
+    check("the admin gets a Cyklus tile once mor shares", "mor: menstruation" in ph.locator(".hm-tile", has_text="Cyklus").inner_text())
+    ph.locator(".hm-tile", has_text="Cyklus").click()
+    ph.wait_for_selector(".cy-shared")
+    shared = ph.locator(".cy-shared").inner_text()
+    check("the shared card shows her status only", "Menstruationsdag 1" in shared and "Frugtbare" not in shared
+          and "Kramper" not in shared, shared[:200])
+    check("her note is nowhere on the admin's page", "Hemmelig cyklusnote" not in ph.content())
+    check("the admin cannot log a cycle (not set to female)", ph.locator(".cy-hero").count() == 0)
+    ph.screenshot(path=f"{OUT}/20-cyklus-shared.png", full_page=True)
 
     browser.close()
 

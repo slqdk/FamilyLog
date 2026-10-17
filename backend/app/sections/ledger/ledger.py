@@ -105,6 +105,53 @@ def category_label(key: str) -> str:
     return CATEGORIES.get(key, ("Not categorised", ""))[0] if key else "Not categorised"
 
 
+def category_da(key: str) -> str:
+    """The Danish name, for the family's phone page (0.3.0)."""
+    return CATEGORIES.get(key, ("", "Ikke kategoriseret"))[1] if key else "Ikke kategoriseret"
+
+
+# ---- who may read whose ledger (0.3.0) -----------------------------------------------------------
+# A ledger is one admin/user account's own. The administrator can give a
+# family account read access to one such ledger (the phone page: overview,
+# transactions, asking Alf). Import, categories and clearing stay the
+# owner's, in the admin app - the family API has no route for them.
+
+def viewers() -> list[dict]:
+    with db.connect() as con:
+        return [{"userId": r["user_id"], "ownerId": r["owner_id"]} for r in con.execute(
+            "SELECT user_id, owner_id FROM ledger_viewers ORDER BY user_id")]
+
+
+def set_viewer(user_id: int, owner_id: int | None) -> None:
+    with db.connect() as con:
+        u = con.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
+        if u is None:
+            raise Invalid("No such account.")
+        if owner_id is None:
+            con.execute("DELETE FROM ledger_viewers WHERE user_id=?", (user_id,))
+            return
+        if u["role"] != "family":
+            raise Invalid("Only family accounts are given access; admin and user accounts "
+                          "have their own Økonomi.")
+        o = con.execute("SELECT role FROM users WHERE id=?", (owner_id,)).fetchone()
+        if o is None or o["role"] not in ("admin", "user"):
+            raise Invalid("The Økonomi shared must be an admin or user account's.")
+        con.execute("INSERT INTO ledger_viewers (user_id, owner_id) VALUES (?, ?)"
+                    " ON CONFLICT(user_id) DO UPDATE SET owner_id=excluded.owner_id",
+                    (user_id, owner_id))
+
+
+def ledger_for(me: dict) -> int | None:
+    """Whose ledger this signed-in person reads on the phone page: their own
+    (admin/user), the one they were given (family), or None."""
+    if me["role"] in ("admin", "user"):
+        return me["id"]
+    with db.connect() as con:
+        r = con.execute("SELECT owner_id FROM ledger_viewers WHERE user_id=?",
+                        (me["id"],)).fetchone()
+    return r["owner_id"] if r else None
+
+
 # ---- merchant rules -------------------------------------------------------------
 # (pattern on the cleaned merchant OR the raw text, canonical name, category).
 # The canonical name groups a chain's shops: "MCDKOLDING", "MCD VEJLE DTC" and

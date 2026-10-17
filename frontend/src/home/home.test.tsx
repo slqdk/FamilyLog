@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { homeApi, type ChatState, type DagbogConfig } from './api';
+import { homeApi, type ChatState, type CyOwn, type CyState, type DagbogConfig, type OkMonth } from './api';
 import { Shortcuts } from './HomeApp';
 import { Chat } from './Chat';
 import { DagbogPage, weekNumber } from './Dagbog';
-import { addDays, dayTitle, face, mean, parseRoute, routeHash, weekStart } from './logic';
+import { CyklusDayPage, CyklusPage } from './Cyklus';
+import { OkonomiPage } from './Okonomi';
+import { addDays, addMonths, dayTitle, face, kr, mean, monthGrid, monthTitle, parseRoute, routeHash, weekStart } from './logic';
 
 describe('front page logic', () => {
   it('routes', () => {
@@ -14,6 +16,23 @@ describe('front page logic', () => {
     expect(parseRoute('#/dagbog/familien/2026-10-12')).toEqual({ name: 'family', week: '2026-10-12' });
     expect(parseRoute('#/dagbog/x')).toEqual({ name: 'dagbog', day: null });
     expect(routeHash({ name: 'family', week: null })).toBe('#/dagbog/familien');
+    expect(parseRoute('#/okonomi/2026-09')).toEqual({ name: 'okonomi', month: '2026-09' });
+    expect(parseRoute('#/okonomi/2026-13')).toEqual({ name: 'okonomi', month: null });
+    expect(parseRoute('#/cyklus/dag/2026-10-17')).toEqual({ name: 'cyklusDay', day: '2026-10-17' });
+    expect(parseRoute('#/cyklus/kalender')).toEqual({ name: 'cyklusCal', month: null });
+    expect(parseRoute('#/cyklus/deling')).toEqual({ name: 'cyklusShare' });
+    expect(routeHash({ name: 'cyklusCal', month: '2026-11' })).toBe('#/cyklus/kalender/2026-11');
+  });
+
+  it('months and money', () => {
+    expect(addMonths('2026-12', 1)).toBe('2027-01');
+    expect(addMonths('2026-01', -1)).toBe('2025-12');
+    expect(monthTitle('2026-10')).toBe('Oktober 2026');
+    const g = monthGrid('2026-10');                        // 1 October 2026 is a Thursday
+    expect(g.slice(0, 4)).toEqual([null, null, null, '2026-10-01']);
+    expect(g.filter(Boolean)).toHaveLength(31);
+    expect(kr(12345.6).replace(/\s/g, ' ')).toBe('12.346 kr');
+    expect(kr(-9.5, true).replace(/\s/g, ' ')).toBe('-9,50 kr');
   });
 
   it('counts days and weeks in local time', () => {
@@ -37,22 +56,41 @@ describe('front page logic', () => {
   });
 });
 
+const NO_CY: CyState = { enabled: false, shared: [], options: { flows: [], symptoms: [], moods: [], disclaimer: '', phases: {} } };
+
 describe('shortcuts', () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
-  it('a family account gets Atlas and Dagbog, not Økonomi', async () => {
+  it('a family account without access gets Atlas and Dagbog only', async () => {
     vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [] });
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: false });
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue(NO_CY);
     render(<Shortcuts me={{ id: 3, username: 'barn', role: 'family' }} atlas="Alf’s Atlas" />);
     expect(screen.getByText('Alf’s Atlas').closest('a')).toHaveAttribute('href', '/fm/');
     expect(screen.getByText('Dagbog')).toBeInTheDocument();
-    expect(screen.queryByText('Økonomi')).toBeNull();
     expect(await screen.findByText('Hvordan var i dag?')).toBeInTheDocument();
+    expect(screen.queryByText('Økonomi')).toBeNull();
+    expect(screen.queryByText('Cyklus')).toBeNull();
   });
 
-  it('a grown-up also gets Økonomi, into the admin app', async () => {
-    vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [new Date().toISOString().slice(0, 10)] });
-    render(<Shortcuts me={{ id: 1, username: 'admin', role: 'admin' }} atlas="Alf’s Atlas" />);
-    expect(screen.getByText('Økonomi').closest('a')).toHaveAttribute('href', '/app/#ledger');
+  it('Økonomi opens the phone page; a family account given access sees whose', async () => {
+    vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [] });
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: false, owner: 'far', count: 3, firstDate: null,
+      lastDate: null, uncategorised: 0, months: [], model: true, ask: null });
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue(NO_CY);
+    render(<Shortcuts me={{ id: 3, username: 'mor', role: 'family' }} atlas="Alf’s Atlas" />);
+    expect((await screen.findByText('Økonomi')).closest('a')).toHaveAttribute('href', '#/okonomi');
+    expect(screen.getByText('fars forbrug')).toBeInTheDocument();
+  });
+
+  it('Cyklus shows her cycle day, or what is shared with you', async () => {
+    vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [] });
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: false });
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue({ ...NO_CY, shared: [{ id: 2, name: 'mor', today: '2026-10-17',
+      empty: false, shareFertile: false, shareDetails: false, phase: 'pms', phaseLabel: 'PMS-dage', cycleDay: 25 }] });
+    render(<Shortcuts me={{ id: 1, username: 'far', role: 'user' }} atlas="Alf’s Atlas" />);
+    expect((await screen.findByText('Cyklus')).closest('a')).toHaveAttribute('href', '#/cyklus');
+    expect(screen.getByText('mor: pms-dage')).toBeInTheDocument();
   });
 });
 
@@ -132,5 +170,96 @@ describe('Dagbog', () => {
       day: '2026-10-17', mood: 4, mental: 8, alcohol: 2, foods: ['Hjemmelavet', 'Kage'],
       tags: ['Sport'], highlight: 'Mål!' }));
     expect(await screen.findByText('Gemt ✓')).toBeInTheDocument();
+  });
+});
+
+const MONTH: OkMonth = {
+  month: '2026-09', count: 40, spent: 12000, income: 30000, otherIn: 0, transfersOut: 0,
+  baselinePerMonth: 10000, baselineMonths: 6, days: null,
+  categories: [{ key: 'groceries', name: 'Dagligvarer', spent: 5000, count: 20, usual: 4000 }],
+  topMerchants: [{ key: 'netto', name: 'Netto', spent: 2500, count: 9, categoryName: 'Dagligvarer' }],
+  recurring: [{ name: 'Forsikring', typical: 800, yearly: 9600, categoryName: 'Forsikring' }],
+};
+
+describe('Økonomi on the phone', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('shows the month against a usual one, read only for a viewer', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: false, owner: 'far', count: 40,
+      firstDate: '2026-08-01', lastDate: '2026-09-30', uncategorised: 2, months: ['2026-08', '2026-09'], model: true, ask: null });
+    const month = vi.spyOn(homeApi, 'okMonth').mockResolvedValue(MONTH);
+    vi.spyOn(homeApi, 'okTx').mockResolvedValue({ total: 1, sum: -120, rows: [{ date: '2026-09-03', merchant: 'Netto',
+      text: 'NETTO', amount: -120, category: 'groceries', categoryName: 'Dagligvarer', merchantKey: 'netto' }] });
+    render(<OkonomiPage month={null} />);
+    expect(await screen.findByText('Du ser fars økonomi · kun læsning')).toBeInTheDocument();
+    expect(month).toHaveBeenCalledWith('2026-09');                     // the newest month first
+    expect(await screen.findByText('20 % over en normal måned')).toBeInTheDocument();
+    expect(screen.queryByText(/admin-appen/)).toBeNull();                // not the owner
+    fireEvent.click(screen.getByText('Dagligvarer'));
+    expect(await screen.findByLabelText('Posteringer: Dagligvarer')).toBeInTheDocument();
+  });
+
+  it('says so when there is no access', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: false });
+    render(<OkonomiPage month={null} />);
+    expect(await screen.findByText('Du har ikke adgang til Økonomi.')).toBeInTheDocument();
+  });
+});
+
+const OPTIONS = { flows: [{ key: 'let', label: 'Let' }, { key: 'kraftig', label: 'Kraftig' }],
+  symptoms: ['Kramper', 'Hovedpine'], moods: ['Glad', 'Irritabel'], disclaimer: 'Ikke prævention.', phases: {} };
+const OWN: CyOwn = {
+  status: { empty: false, today: '2026-10-17', cycleDay: 20, phase: 'luteal', phaseLabel: 'Lutealfase',
+    phaseText: 'Energien falder ofte lidt.', inPeriod: false, periodDay: null, nextStart: '2026-10-26', daysUntilNext: 9,
+    late: 0, ovulation: '2026-11-09', fertileFrom: '2026-11-04', fertileTo: '2026-11-10', fertileToday: false,
+    lastStart: '2026-09-28', lastOpen: false,
+    averages: { cycle: 28, cycleSource: 'målt', period: 5, cyclesMeasured: 2, spread: 0, regular: null, history: [28, 28] } },
+  forecast: [], patterns: { luteal: { label: 'Lutealfase', days: 4, top: [{ name: 'Træt', count: 3 }], mood: 3.2, mental: null } },
+  periods: [{ id: 1, start: '2026-09-28', end: '2026-10-02', periodDays: 5, cycleLength: null }],
+  settings: { cycleLength: null, periodLength: null, shareFertile: false, shareDetails: false, viewers: [] },
+  today: { day: '2026-10-17', flow: '', symptoms: [], moods: [], note: '' },
+};
+
+describe('Cyklus', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('her own page: the countdown, insights and a period start', async () => {
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue({ enabled: true, shared: [], options: OPTIONS, own: OWN });
+    vi.spyOn(homeApi, 'cyCalendar').mockResolvedValue({ days: [] });
+    const start = vi.spyOn(homeApi, 'cyStart').mockResolvedValue({ ...OWN,
+      status: { ...OWN.status, inPeriod: true, periodDay: 1, cycleDay: 1, phase: 'menstruation' } });
+    render(<CyklusPage />);
+    expect(await screen.findByText('Menstruation om 9 dage')).toBeInTheDocument();
+    expect(screen.getByText('Det plejer du at mærke nu')).toBeInTheDocument();
+    expect(screen.getByText('Ikke prævention.')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Menstruationen startede i dag'));
+    await waitFor(() => expect(start).toHaveBeenCalled());
+    expect(await screen.findByText('Menstruationsdag 1')).toBeInTheDocument();
+  });
+
+  it('a shared card shows what she shares and nothing else', async () => {
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue({ enabled: false, options: OPTIONS, shared: [{
+      id: 2, name: 'mor', today: '2026-10-17', empty: false, shareFertile: false, shareDetails: false,
+      cycleDay: 25, phase: 'pms', phaseLabel: 'PMS-dage', phaseText: 'Lidt ekstra tålmodighed hjælper.',
+      inPeriod: false, periodDay: null, nextStart: '2026-10-21', daysUntilNext: 4, late: 0,
+      week: [{ day: '2026-10-17', kind: 'pms' }] }] });
+    render(<CyklusPage />);
+    expect(await screen.findByText('Menstruation om 4 dage')).toBeInTheDocument();
+    expect(screen.getByText('PMS-dage')).toBeInTheDocument();
+    expect(screen.queryByText(/Frugtbare/)).toBeNull();
+    expect(screen.queryByText('Menstruationen startede i dag')).toBeNull();
+  });
+
+  it('logs a day', async () => {
+    vi.spyOn(homeApi, 'cyState').mockResolvedValue({ enabled: true, shared: [], options: OPTIONS, own: OWN });
+    vi.spyOn(homeApi, 'cyDay').mockResolvedValue({ day: { day: '2026-10-15', flow: '', symptoms: [], moods: [], note: '' } });
+    const save = vi.spyOn(homeApi, 'cySaveDay').mockImplementation(async (d) => ({ ...OWN, today: { note: '', ...d } as never }));
+    render(<CyklusDayPage day="2026-10-15" />);
+    fireEvent.click(await screen.findByText('Kraftig'));
+    fireEvent.click(screen.getByText('Kramper'));
+    fireEvent.click(screen.getByText('Irritabel'));
+    fireEvent.click(screen.getByText('Gem dagen'));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ day: '2026-10-15', flow: 'kraftig',
+      symptoms: ['Kramper'], moods: ['Irritabel'], note: '' }));
   });
 });

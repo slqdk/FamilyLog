@@ -1,8 +1,9 @@
 """Økonomi endpoints (2.63.0) - /api/ledger/...
 
-Everything is the signed-in person's own ledger (user_id from the session);
-there is nothing to share and nothing another account can read. A family
-account never gets here (auth.family_allows lets it reach /api/fm only).
+Everything is the signed-in person's own ledger (user_id from the session).
+A family account never gets here (auth.family_allows keeps it out of
+/api/ledger); one given read access uses the phone page's /api/okonomi
+(okonomi_routes.py, 0.3.0).
 """
 from __future__ import annotations
 
@@ -13,6 +14,31 @@ from pydantic import BaseModel
 from . import ledger, ledger_ask
 
 router = APIRouter()
+
+
+@router.get("/api/ledger/viewers")
+def ledger_viewers(request: Request):
+    """Which family account reads which Økonomi (administrator)."""
+    _admin(request)
+    return ledger.viewers()
+
+
+class ViewerBody(BaseModel):
+    userId: int
+    ownerId: int | None = None
+
+
+@router.put("/api/ledger/viewers")
+def ledger_viewer_set(body: ViewerBody, request: Request):
+    _admin(request)
+    _call(ledger.set_viewer, body.userId, body.ownerId)
+    ledger_ask.forget(body.userId)          # an answer about the old ledger goes with the access
+    return ledger.viewers()
+
+
+def _admin(request: Request) -> None:
+    if request.state.user["role"] != "admin":
+        raise HTTPException(403, "Administrator only.")
 
 
 def _uid(request: Request) -> int:
@@ -65,6 +91,7 @@ async def ledger_clear(request: Request):
     ledger_ask.stop(uid)
     ledger.clear(uid)
     ledger_ask.reset(uid)
+    ledger_ask.forget_viewers_of(uid)
     return {"cleared": True}
 
 
@@ -158,3 +185,9 @@ def ledger_ask_export(request: Request):
     text = _call(ledger_ask.markdown, _uid(request), APP_VERSION)
     return Response(text, media_type="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": 'attachment; filename="okonomi-question.md"'})
+
+
+# The phone page's read-only Økonomi (0.3.0) rides on this section's router.
+from .okonomi_routes import router as _okonomi_router  # noqa: E402
+
+router.include_router(_okonomi_router)

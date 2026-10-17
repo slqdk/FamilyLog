@@ -2,8 +2,10 @@
 
 A self-hosted household app. A phone front page at `/` with **Alf** (a local
 model the family can ask anything, that knows the family's places) and the
-**Dagbog** (rate the day); **FamilyMap** (the family's own reviews of places,
-Alf's Atlas at `/fm/`); and **Økonomi** (bank exports in, exact numbers out).
+**Dagbog** (rate the day), **Økonomi** read on the phone, and **Cyklus** (a
+period log and forecast she shares as she chooses); **FamilyMap** (the
+family's own reviews of places, Alf's Atlas at `/fm/`); and **Økonomi** in
+the admin app (bank exports in, exact numbers out).
 The admin app is at `/app/`.
 FastAPI + SQLite backend, React + Vite frontend, one container, models from
 Ollama on the GPU VM.
