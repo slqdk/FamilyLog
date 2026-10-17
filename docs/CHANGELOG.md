@@ -2,6 +2,17 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.2.2 - 2026-10-17
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Mentalt overskud** is rated 1-10 (two rows of five buttons); Humør keeps
+  its five smileys. Days already saved on the old 1-5 scale are doubled
+  (3 becomes 6) so old and new days compare. The family week shows it as
+  dots and "7/10".
+- **Børnepasning** (childcare) is a new activity. It is also added to an
+  activity list the administrator has already saved.
+
 ## 0.2.1 - 2026-10-17
 
 The Dagbog after the first look.

@@ -133,11 +133,13 @@ function FieldBox({ f, draft, set, lists, day, hasPhoto, photoV, busy, onPhoto, 
   const key = f.key as keyof Draft;
   if (f.kind === 'scale') {
     const value = draft[key] as number | null;
+    const top = f.max ?? 5;                       // mood 1-5, mentalt overskud 1-10 (0.2.2)
     return (
       <section className="fm-sheet hm-field" aria-label={f.label}>
         <h3 className="hm-field-label">{f.label}</h3>
-        <div className={`hm-scale${f.faces ? ' hm-faces' : ''}`} role="radiogroup" aria-label={f.label}>
-          {[1, 2, 3, 4, 5].map((n) => (
+        <div className={`hm-scale${f.faces ? ' hm-faces' : ''}${top > 5 ? ' hm-scale-long' : ''}`}
+             role="radiogroup" aria-label={f.label}>
+          {Array.from({ length: top }, (_, i) => i + 1).map((n) => (
             <button key={n} role="radio" aria-checked={value === n} className={value === n ? 'on' : ''}
                     aria-label={`${f.label} ${n}`}
                     onClick={() => set(key, (value === n ? null : n) as never)}>
@@ -207,7 +209,7 @@ function FieldBox({ f, draft, set, lists, day, hasPhoto, photoV, busy, onPhoto, 
 
 // ---- the family's week -----------------------------------------------------------------
 
-const SCALE_KEYS: [keyof DagbogEntry, string][] = [['mental', 'Mentalt overskud']];
+const SCALE_KEYS: [keyof DagbogEntry, string, number][] = [['mental', 'Mentalt overskud', 10]];
 
 export function FamilyWeek({ me, week }: { me: FmUser; week: string | null }) {
   const today = todayLocal();
@@ -279,8 +281,8 @@ export function FamilyWeek({ me, week }: { me: FmUser; week: string | null }) {
             <h3 className="hm-field-label">{pick?.userId === me.id ? 'Mig' : pickedName} · {dayTitle(picked.day, today)}</h3>
             <p className="hm-detail-mood">{face(picked.mood)} {picked.mood ? `Humør ${picked.mood}/5` : 'Humør ikke angivet'}</p>
             <dl className="fm-fieldlist">
-              {SCALE_KEYS.filter(([k]) => picked[k] != null).map(([k, label]) => (
-                <div key={k}><dt>{label}</dt><dd><Dots n={picked[k] as number} /></dd></div>
+              {SCALE_KEYS.filter(([k]) => picked[k] != null).map(([k, label, top]) => (
+                <div key={k}><dt>{label}</dt><dd><Dots n={picked[k] as number} max={top} /></dd></div>
               ))}
               {picked.alcohol != null && <div><dt>Alkohol</dt><dd>{picked.alcohol} genstande</dd></div>}
             </dl>
@@ -302,10 +304,11 @@ export function FamilyWeek({ me, week }: { me: FmUser; week: string | null }) {
   );
 }
 
-function Dots({ n }: { n: number }) {
+function Dots({ n, max }: { n: number; max: number }) {
   return (
-    <span className="hm-dots" aria-label={`${n} af 5`}>
-      {[1, 2, 3, 4, 5].map((i) => <span key={i} className={i <= n ? 'on' : ''} />)}
+    <span className="hm-dots" aria-label={`${n} af ${max}`}>
+      {Array.from({ length: max }, (_, i) => i + 1).map((i) => <span key={i} className={i <= n ? 'on' : ''} />)}
+      <b>{n}/{max}</b>
     </span>
   );
 }

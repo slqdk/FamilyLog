@@ -29,7 +29,7 @@ def _jpeg() -> bytes:
     return buf.getvalue()
 
 
-FULL = {"day": TODAY, "mood": 4, "mental": 2, "foods": ["hjemmelavet", "Kage"],
+FULL = {"day": TODAY, "mood": 4, "mental": 8, "foods": ["hjemmelavet", "Kage"],
         "alcohol": 2, "tags": ["Sport", "venner"], "highlight": "Vi vandt kampen!"}
 
 
@@ -38,7 +38,8 @@ def test_config_has_every_field_and_the_default_tags(client):
     assert [f["key"] for f in c["fields"]] == ["mood", "mental", "foods", "alcohol", "tags",
                                                 "highlight"]                 # 0.2.1: no sleep/energy
     assert c["fields"][0]["faces"][4] == "😄" and c["today"] == TODAY
-    for t in ("Sport", "Computer", "Fjernsyn", "Vedligehold af hus og have"):
+    assert (c["fields"][0]["max"], c["fields"][1]["max"]) == (5, 10)     # mood 1-5, overskud 1-10
+    for t in ("Sport", "Computer", "Fjernsyn", "Vedligehold af hus og have", "Børnepasning"):
         assert t in c["tags"]
     for f in ("Hjemmelavet", "Fastfood", "Kage", "Chips"):
         assert f in c["foods"]
@@ -63,6 +64,7 @@ def test_validation_speaks_danish(client):
     for body, needle in (({"day": future, "mood": 3}, "ikke kommet"),
                          ({"day": TODAY, "mood": 6}, "1-5"),
                          ({"day": TODAY, "mood": True}, "1-5"),
+                         ({"day": TODAY, "mental": 11}, "1-10"),
                          ({"day": TODAY, "alcohol": -1}, "genstande"),
                          ({"day": TODAY, "tags": ["Rumfart"]}, "Ukendt aktivitet"),
                          ({"day": TODAY, "foods": ["Rumfoder"]}, "Ukendt madtype"),
@@ -158,3 +160,20 @@ def test_migration_2_keeps_hand_set_food_and_adds_the_column(fresh_db):
     assert dagbog.fields_for(u["id"]) == ["mood", "foods"]
     e = dagbog.get_entry(u["id"], TODAY)
     assert e["mood"] == 3 and e["foods"] == [] and "sleep" not in e
+
+
+def test_migration_3_doubles_old_overskud_and_adds_childcare(fresh_db):
+    import json
+    from app.core import auth, db
+    from app.sections.dagbog import _m003_mental_ten, dagbog
+    u = auth.create_user("mor", "familie-kode-1", "family")
+    dagbog.set_tags(["Sport", "Fri"])
+    with db.connect() as con:
+        con.execute("INSERT INTO dagbog_entries (user_id, day, mental, tags, highlight, created_at,"
+                    " updated_at) VALUES (?, ?, 3, '[]', '', 'x', 'x')", (u["id"], TODAY))
+        _m003_mental_ten(con)
+    assert dagbog.get_entry(u["id"], TODAY)["mental"] == 6
+    assert dagbog.tags() == ["Sport", "Fri", "Børnepasning"]
+    with db.connect() as con:
+        assert json.loads(con.execute("SELECT value FROM dagbog_settings WHERE key='tags'")
+                          .fetchone()[0]).count("Børnepasning") == 1

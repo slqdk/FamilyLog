@@ -81,6 +81,8 @@
 .hm-scale button.on { background: var(--fm-olive); border-color: var(--fm-olive); color: var(--fm-cream); }
 .hm-faces button { font-size: 28px; height: 56px; }
 .hm-faces button.on { background: var(--fm-cream-2); border-color: var(--fm-olive); border-width: 3px; }
+.hm-scale.hm-scale-long { row-gap: 8px; }                  /* 1-10: two rows of five */
+.hm-scale.hm-scale-long button { height: 44px; }
 .hm-scale-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--fm-dim); margin-top: 6px; }
 .hm-count { display: flex; align-items: center; gap: 12px; }
 .hm-count > button:not(.fm-clear) { width: 52px; height: 48px; border-radius: 14px; border: 1.5px solid var(--fm-line);
@@ -122,7 +124,8 @@
 .hm-cell.on { outline: 3px solid var(--fm-olive); }
 .hm-avg { font-size: 18px; }
 .hm-detail-mood { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
-.hm-dots { display: inline-flex; gap: 4px; }
+.hm-dots { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.hm-dots b { margin-left: 6px; font-weight: 600; font-size: 14px; }
 .hm-dots span { width: 11px; height: 11px; border-radius: 50%; background: var(--fm-line); }
 .hm-dots span.on { background: var(--fm-olive); }
 

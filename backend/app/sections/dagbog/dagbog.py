@@ -1,7 +1,7 @@
 """Dagbog (FamilyLog 0.2.0): each person rates their day.
 
-One entry per person per day: mood and mental readiness ("mentalt
-overskud", 1-5 each), what was eaten (food categories), alcohol (units),
+One entry per person per day: mood (1-5) and mental readiness ("mentalt
+overskud", 1-10 since 0.2.2), what was eaten (food categories), alcohol (units),
 activities, and the day's highlight - a text and one photo. The food
 categories and the activities are lists the administrator keeps.
 
@@ -30,9 +30,10 @@ from app.core import db
 from ..familymap import familymap as fm
 
 SCALES = {
-    "mood": {"label": "Humør", "low": "Rigtig skidt", "high": "Rigtig godt",
+    "mood": {"label": "Humør", "low": "Rigtig skidt", "high": "Rigtig godt", "max": 5,
              "faces": ["😞", "🙁", "😐", "🙂", "😄"]},
-    "mental": {"label": "Mentalt overskud", "low": "Intet overskud", "high": "Masser af overskud"},
+    "mental": {"label": "Mentalt overskud", "low": "Intet overskud", "high": "Masser af overskud",
+               "max": 10},
 }
 FIELDS = {
     **{k: {"kind": "scale", **v} for k, v in SCALES.items()},
@@ -44,7 +45,7 @@ FIELDS = {
 FIELD_ORDER = list(FIELDS)
 DEFAULT_TAGS = ["Skole/arbejde", "Sport", "Computer", "Gaming", "Fjernsyn", "Mobil",
                 "Vedligehold af hus og have", "Rengøring", "Madlavning", "Indkøb",
-                "Venner", "Familie", "Udenfor", "Læsning", "Hobby", "Fri", "Syg"]
+                "Børnepasning", "Venner", "Familie", "Udenfor", "Læsning", "Hobby", "Fri", "Syg"]
 DEFAULT_FOODS = ["Hjemmelavet", "Fastfood", "Takeaway", "Restaurant", "Kage", "Chips",
                  "Slik", "Is", "Sodavand", "Frugt og grønt", "Morgenmad", "Madpakke"]
 LISTS = {"tags": DEFAULT_TAGS, "foods": DEFAULT_FOODS}
@@ -194,8 +195,9 @@ def save_entry(user_id: int, body: dict) -> dict:
     values: dict = {}
     for key in SCALES:
         v = body.get(key) if key in allowed else None
-        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= 5):
-            raise Invalid(f"{FIELDS[key]['label']} skal være 1-5.")
+        top = SCALES[key]["max"]
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or not 1 <= v <= top):
+            raise Invalid(f"{FIELDS[key]['label']} skal være 1-{top}.")
         values[key] = v
     a = body.get("alcohol") if "alcohol" in allowed else None
     if a is not None and (not isinstance(a, int) or isinstance(a, bool)

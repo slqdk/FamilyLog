@@ -5,7 +5,19 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
-## 0.2.1 - Start here
+## 0.2.2 - Start here
+
+`mental` is now 1-10: `SCALES` entries carry `max` (mood 5, mental 10),
+`save_entry` validates against it, and the front page renders `f.max`
+buttons (`.hm-scale-long` = two rows of five). The family-week detail has
+the max hard-coded in `SCALE_KEYS` (`['mental', 'Mentalt overskud', 10]`)
+because it does not load the config - change both if a scale changes.
+Dagbog migration 3 doubles stored `mental` values <= 5 and appends
+"Børnepasning" to an admin-saved `tags` list; `DEFAULT_TAGS` has it too.
+
+---
+
+## 0.2.1
 
 Dagbog changes from Søren's first look (read 0.2.0 below for the rest):
 fields are now `mood`, `mental` (1-5), `foods` (list, like `tags`), `alcohol`,

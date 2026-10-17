@@ -249,11 +249,14 @@ with sync_playwright() as p:
     fp.get_by_label("Humør 4").click()
     check("no Søvn or Energi in the Dagbog (0.2.1)", fp.get_by_label("Søvn 3").count() == 0
           and fp.get_by_label("Energi 3").count() == 0)
-    fp.get_by_label("Mentalt overskud 3").click()
+    check("Mentalt overskud runs 1-10 (0.2.2)",
+          fp.locator(".hm-field[aria-label='Mentalt overskud'] .hm-scale button").count() == 10)
+    fp.get_by_label("Mentalt overskud 7").click()
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Hjemmelavet").click()
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Kage").click()
     fp.get_by_label("Flere").click()
     fp.locator(".hm-tags button", has_text="Sport").click()
+    fp.locator(".hm-tags button", has_text="Børnepasning").click()
     fp.locator(".hm-text").fill("Hemmelig dagbogstekst")
     from PIL import Image
     import io
@@ -293,7 +296,8 @@ with sync_playwright() as p:
     row.locator(".hm-cell:not(.hm-empty)").first.click()
     detail = ph.locator(".hm-detail").inner_text()
     check("the day's detail has ratings, food and activities, not the text",
-          "Sport" in detail and "Kage" in detail and "Hemmelig" not in detail
+          "Sport" in detail and "Kage" in detail and "Børnepasning" in detail
+          and "7/10" in detail and "Hemmelig" not in detail
           and "kun for mor" in detail, detail[:200])
     check("mor's text is nowhere on the admin's page", "Hemmelig" not in ph.content())
     ph.screenshot(path=f"{OUT}/11-admin-family-week.png", full_page=True)

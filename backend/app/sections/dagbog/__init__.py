@@ -56,12 +56,32 @@ def _m002_foods(con: sqlite3.Connection) -> None:
                         (json.dumps(fields), r[0]))
 
 
+def _m003_mental_ten(con: sqlite3.Connection) -> None:
+    """0.2.2: mental readiness is 1-10. Days saved on the 1-5 scale are
+    doubled (3 -> 6), so old and new days compare. An activity list the
+    administrator already saved gets "Børnepasning", like the default."""
+    import json
+    con.execute("UPDATE dagbog_entries SET mental = mental * 2"
+                " WHERE mental IS NOT NULL AND mental <= 5")
+    r = con.execute("SELECT value FROM dagbog_settings WHERE key = 'tags'").fetchone()
+    if r:
+        try:
+            tags = json.loads(r[0])
+        except ValueError:
+            return
+        if isinstance(tags, list) and not any(str(t).lower() == "børnepasning" for t in tags):
+            tags.append("Børnepasning")
+            con.execute("UPDATE dagbog_settings SET value = ? WHERE key = 'tags'",
+                        (json.dumps(tags, ensure_ascii=False),))
+
+
 SECTION = Section(
     id="dagbog",
     title="Dagbog",
     router=router,
     migrations=[(1, "dagbog entries, settings, members", _m001_dagbog),
-                (2, "food categories", _m002_foods)],
+                (2, "food categories", _m002_foods),
+                (3, "mental readiness 1-10, childcare activity", _m003_mental_ten)],
     family_prefixes=("/api/dagbog/",),
     on_user_deleted=dagbog.forget_user,
 )
