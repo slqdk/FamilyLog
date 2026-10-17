@@ -73,7 +73,7 @@ export interface OkData {
   count: number; left: number; model: boolean;
   uncategorised: { key: string; name: string; sample: string; count: number; total: number }[];
   categorise: { state: string; left: number; placed?: number; error?: string | null; ahead?: number | null };
-  categories: { key: string; name: string }[];
+  categories: { key: string; name: string; group?: string }[];
 }
 export interface OkMonth {
   month: string; count: number; spent: number; income: number; otherIn: number; transfersOut: number;

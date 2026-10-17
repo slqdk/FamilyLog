@@ -4,7 +4,7 @@ import type { StepsPayload } from '../../core/types';
     number on these pages is computed by the backend in SQL; the model only
     turns a question into a search and writes up the result. */
 
-export interface LedgerCategory { key: string; label: string; da: string; counted: boolean }
+export interface LedgerCategory { key: string; label: string; da: string; counted: boolean; group?: string }
 export interface LedgerImport {
   id: number; account: string; filename: string; importedAt: string; rowsInFile: number;
   added: number; alreadyThere: number; firstDate: string | null; lastDate: string | null;

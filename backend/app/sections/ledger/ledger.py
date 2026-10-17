@@ -60,7 +60,14 @@ CATEGORIES: dict[str, tuple[str, str]] = {
     "groceries": ("Groceries", "Dagligvarer"),
     "fast-food": ("Fast food", "Fast food"),
     "restaurant": ("Restaurant", "Restaurant"),
-    "car": ("Car & fuel", "Bil & brændstof"),
+    # 0.3.4 (Søren): "Bil & brændstof" split in four, plus the fuel
+    # station's shop; and children.
+    "car-loan": ("Car loan", "Billån"),
+    "car-tax": ("Car taxes & fees", "Bilafgifter"),
+    "car-maintenance": ("Car maintenance", "Bilvedligeholdelse"),
+    "fuel": ("Fuel & charging", "Brændstof"),
+    "gas-station": ("Fuel station shop", "Tankstationer"),
+    "children": ("Children", "Børn"),
     "transport": ("Transport & parking", "Transport & parkering"),
     "clothing": ("Clothes", "Tøj"),
     "germany-shopping": ("Germany shopping", "Tysklandshandel"),
@@ -93,6 +100,33 @@ CATEGORIES: dict[str, tuple[str, str]] = {
     "transfers": ("Own transfers", "Egne overførsler"),
     "other": ("Other", "Andet"),
 }
+# The order and sections of the category picker (0.3.4: house first, then
+# the car, ...). Every key in exactly one section.
+CATEGORY_GROUPS: list[tuple[str, list[str]]] = [
+    ("Hus & bolig", ["rent", "mortgage", "utilities", "home"]),
+    ("Bil & transport", ["car-loan", "car-tax", "car-maintenance", "fuel", "gas-station", "transport"]),
+    ("Mad", ["groceries", "fast-food", "restaurant"]),
+    ("Børn", ["children"]),
+    ("Indkøb", ["clothing", "electronics", "germany-shopping", "china-shopping", "shopping"]),
+    ("Faste udgifter & abonnementer", ["insurance", "phone", "streaming", "tv", "ai", "subscriptions", "union"]),
+    ("Sundhed & pleje", ["health", "dental", "physio", "personal-care"]),
+    ("Fritid & rejser", ["leisure", "travel"]),
+    ("Penge", ["income", "transfers", "people", "cash", "card-bill", "fees", "loans"]),
+    ("Andet", ["other"]),
+]
+# A purchase at a fuel station (a merchant in "fuel") below this is the
+# station's shop - coffee, a hotdog - and counts as "gas-station" (0.3.4,
+# Søren: by amount). Decided per purchase, in the SQL (_cat_sql).
+FUEL_MIN_ORE = 300_00
+
+
+def category_group(key: str) -> str:
+    for title, keys in CATEGORY_GROUPS:
+        if key in keys:
+            return title
+    return "Andet"
+
+
 # Keys retired in 2.63.2, mapped to their best successor for any row still
 # holding them (migration 050, and _spend_sql's safety).
 RETIRED_CATEGORIES = {"eating-out": "restaurant", "housing": "utilities"}
@@ -203,23 +237,33 @@ _RULES_SRC: list[tuple[str, str, str]] = [
     (r"\bhotte\b|\boesterkroen\b|\b(?:ø|oe)sterkroen\b|\bbanehuset\b", "", "restaurant"),
     (r"\bis\b.{0,10}\bved\b|\bishuset\b|\bgelato\b|\bisbar\b", "", "restaurant"),
     # Car & fuel.
-    (r"\bq8\b", "Q8", "car"),
-    (r"^ok\b|\bok plus\b|\bok benzin\b", "OK", "car"),
-    (r"\bthansen\b|\bt\.\s?hansen\b", "Thansen", "car"),
-    (r"\bcircle\s?k\b", "Circle K", "car"),
-    (r"\bshell\b", "Shell", "car"),
-    (r"\buno-?x\b", "Uno-X", "car"),
-    (r"\bingo\b", "Ingo", "car"),
-    (r"\bf24\b", "F24", "car"),
-    (r"\bgo'?on\b", "Go'on", "car"),
-    (r"\boil!?\s?tank\b|\boil!\b", "OIL! tank & go", "car"),
-    (r"\besso\b", "Esso", "car"),
-    (r"\baral\b", "Aral", "car"),
-    (r"\bstar tankstelle\b|\btankstelle\b|\bjet tank", "", "car"),
-    (r"\bclever\b|\bspirii\b|\bmonta\b|\bionity\b|\btesla supercharg", "", "car"),
-    (r"\bbilvask|\bvaskehal|\bwashtec\b", "", "car"),
-    (r"\bauto(?:værksted|vaerksted)?\b|\bdæk\b|\bdaek\b|\bbilsyn\b|\bmekaniker\b", "", "car"),
-    (r"\btrailerudlejn", "", "car"),
+    # Fuel stations and charging -> fuel; a small purchase there counts as the
+    # station's shop ("gas-station", by amount - see FUEL_MIN_ORE). (0.3.4)
+    (r"\bq8\b", "Q8", "fuel"),
+    (r"^ok\b|\bok plus\b|\bok benzin\b", "OK", "fuel"),
+    (r"\bcircle\s?k\b", "Circle K", "fuel"),
+    (r"\bshell\b", "Shell", "fuel"),
+    (r"\buno-?x\b", "Uno-X", "fuel"),
+    (r"\bingo\b", "Ingo", "fuel"),
+    (r"\bf24\b", "F24", "fuel"),
+    (r"\bgo'?on\b", "Go'on", "fuel"),
+    (r"\boil!?\s?tank\b|\boil!\b", "OIL! tank & go", "fuel"),
+    (r"\besso\b", "Esso", "fuel"),
+    (r"\baral\b", "Aral", "fuel"),
+    (r"\bstar tankstelle\b|\btankstelle\b|\bjet tank", "", "fuel"),
+    (r"\bclever\b|\bspirii\b|\bmonta\b|\bionity\b|\btesla supercharg", "", "fuel"),
+    # Keeping the car going -> car-maintenance; the state's car taxes -> car-tax;
+    # paying off the car -> car-loan.
+    (r"\bthansen\b|\bt\.\s?hansen\b", "Thansen", "car-maintenance"),
+    (r"\bbilvask|\bvaskehal|\bwashtec\b", "", "car-maintenance"),
+    (r"\bauto(?:værksted|vaerksted)?\b|\bdæk\b|\bdaek\b|\bbilsyn\b|\bmekaniker\b", "", "car-maintenance"),
+    (r"\bmotorstyrelsen\b|\bv(?:æ|ae)gtafgift|\bejerafgift|\bgr(?:ø|oe)n afgift|\bbilafgift", "", "car-tax"),
+    (r"\bbill(?:å|aa)n\b|\bbilfinans|\bautol(?:å|aa)n\b|\bbilleasing|\bprivatleasing", "", "car-loan"),
+    (r"\btrailerudlejn", "", "transport"),
+    # Children: childcare, after-school, toys and children's shops.
+    (r"\bpladsanvisning|\bdagpleje|\bb(?:ø|oe)rnehave|\bvuggestue|\bsfo\b|\bfritidsklub|\bfritidshjem",
+     "", "children"),
+    (r"\bbabysam\b|\bbr[- ]leget(?:ø|oe)j|\blegek(?:æ|ae)den\b|\bname it\b|\bbilka toys\b", "", "children"),
     # Transport & parking.
     (r"\beasypark\b", "EasyPark", "transport"),
     (r"\bparkman\b", "ParkMan", "transport"),
@@ -890,7 +934,10 @@ _JOIN = (" FROM ledger_tx t LEFT JOIN ledger_merchants m"
 
 
 def _cat_sql() -> str:
-    return "COALESCE(m.category, '')"
+    """A row's category: its merchant's - except a small purchase at a fuel
+    station, which is the station's shop (0.3.4)."""
+    return (f"(CASE WHEN m.category = 'fuel' AND t.amount < 0 AND t.amount > -{FUEL_MIN_ORE}"
+            " THEN 'gas-station' ELSE COALESCE(m.category, '') END)")
 
 
 def summary(user_id: int) -> dict:
@@ -909,8 +956,9 @@ def summary(user_id: int) -> dict:
     return {"count": r["n"], "firstDate": r["a"], "lastDate": r["b"], "accounts": accounts,
             "imports": imports, "merchants": merchants,
             "uncategorised": count_uncategorised(user_id),
-            "categories": [{"key": k, "label": v[0], "da": v[1], "counted": k not in NOT_COUNTED}
-                           for k, v in CATEGORIES.items()]}
+            "categories": [{"key": k, "label": CATEGORIES[k][0], "da": CATEGORIES[k][1],
+                            "counted": k not in NOT_COUNTED, "group": g}
+                           for g, keys in CATEGORY_GROUPS for k in keys]}
 
 
 def _period_where(frm: str | None, to: str | None, account: str | None,
@@ -975,16 +1023,16 @@ def overview(user_id: int, frm: str | None = None, to: str | None = None,
             + _JOIN + where, params).fetchone()
         months = con.execute(
             f"SELECT substr(t.date,1,7) month, {cat} category, SUM({spend}) spent"
-            + _JOIN + where + f" AND {spend} <> 0 GROUP BY month, category ORDER BY month",
+            + _JOIN + where + f" AND {spend} <> 0 GROUP BY 1, 2 ORDER BY month",
             params).fetchall()
         income_m = con.execute(
             f"SELECT substr(t.date,1,7) month, SUM(t.amount) income" + _JOIN + where
             + f" AND {cat}='income' GROUP BY month", params).fetchall()
         cats = con.execute(
             f"SELECT {cat} category, SUM({spend}) spent, COUNT(*) n" + _JOIN + where
-            + f" AND {spend} <> 0 GROUP BY category ORDER BY spent DESC", params).fetchall()
+            + f" AND {spend} <> 0 GROUP BY 1 ORDER BY spent DESC", params).fetchall()
         top_rows = con.execute(
-            f"SELECT t.merchant_key k, COALESCE(m.name, t.merchant) name, {cat} category,"
+            f"SELECT t.merchant_key k, COALESCE(m.name, t.merchant) name, COALESCE(m.category, '') category,"
             f" SUM({spend}) spent, SUM(CASE WHEN t.amount<0 THEN 1 ELSE 0 END) n, MAX(t.date) last"
             + _JOIN + where + f" AND {spend} <> 0 GROUP BY t.merchant_key"
             " HAVING spent > 0 ORDER BY spent DESC LIMIT ?",
@@ -1018,7 +1066,7 @@ def overview(user_id: int, frm: str | None = None, to: str | None = None,
                     bw += " AND t.account = ?"
                     bp.append(account)
                 brows = con.execute(f"SELECT {cat} category, SUM({spend}) spent" + _JOIN + bw
-                                    + " GROUP BY category", bp).fetchall()
+                                    + " GROUP BY 1", bp).fetchall()
                 total_b = sum((r["spent"] or 0) for r in brows)
                 base = {"from": b_from, "to": b_to, "months": n_b,
                         "perMonth": round(total_b / 100 / n_b, 2),
@@ -1131,7 +1179,7 @@ def transactions(user_id: int, q: str = "", category: str | None = None,
         tot = con.execute("SELECT COUNT(*) n, SUM(t.amount) s" + _JOIN + where, params).fetchone()
         rows = con.execute(
             "SELECT t.id, t.account, t.date, t.text, t.amount, t.currency, t.kind,"
-            " t.merchant_key, COALESCE(m.name, t.merchant) merchant, COALESCE(m.category,'') category,"
+            f" t.merchant_key, COALESCE(m.name, t.merchant) merchant, {_cat_sql()} category,"
             " t.foreign_amount, t.foreign_currency" + _JOIN + where
             + f" ORDER BY {orders.get(order, orders['newest'])} LIMIT ? OFFSET ?",
             params + [max(1, min(limit, 500)), max(0, offset)]).fetchall()
@@ -1337,7 +1385,7 @@ def run_spec(user_id: int, spec: dict) -> dict:
             1 if spec["measure"] == "max" else 50)
         rows = con.execute(
             "SELECT t.id, t.account, t.date, t.text, t.amount, t.currency, t.kind, t.merchant_key,"
-            " COALESCE(m.name, t.merchant) merchant, COALESCE(m.category,'') category,"
+            f" COALESCE(m.name, t.merchant) merchant, {_cat_sql()} category,"
             " t.foreign_amount, t.foreign_currency" + _JOIN + where
             + f" ORDER BY {orders[spec['order']]} LIMIT ?", params + [limit]).fetchall()
         if spec["merchants"]:

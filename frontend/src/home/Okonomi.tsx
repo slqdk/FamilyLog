@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Markdown } from '../core/Markdown';
+import { CategoryOptions } from '../sections/ledger/CategoryOptions';
 import { homeApi, type OkAsk, type OkData, type OkMonth, type OkState, type OkTx } from './api';
 import { Bar } from './Dagbog';
 import { addMonths, kr, monthTitle, routeHash, shortDate } from './logic';
@@ -126,7 +127,7 @@ function DataSection({ onChange, open = false }: { onChange: () => void; open?: 
                       <small>{u.count} {u.count === 1 ? 'gang' : 'gange'} · {kr(u.total)}</small></span>
                     <select aria-label={`Kategori for ${u.name}`} value="" onChange={(e) => void place(u.key, e.target.value)}>
                       <option value="">Vælg…</option>
-                      {d.categories.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+                      <CategoryOptions categories={d.categories} label={(c) => c.name} />
                     </select>
                   </li>
                 ))}

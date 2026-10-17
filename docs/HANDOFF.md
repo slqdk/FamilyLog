@@ -5,6 +5,22 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.4 - Start here
+
+Categories: `car` is gone; new keys `car-loan`, `car-tax`, `car-maintenance`,
+`fuel`, `gas-station`, `children` (40 in all). `ledger.CATEGORY_GROUPS` is
+the picker's sections and order (every key exactly once - tested);
+`summary()["categories"]` and `/api/okonomi/data` send `group`, and both
+pickers render `<optgroup>`s via `sections/ledger/CategoryOptions.tsx`.
+Tankstationer is per purchase, in SQL: `_cat_sql()` maps a `fuel` merchant's
+row under `FUEL_MIN_ORE` (300 kr) to `gas-station`; the overview groups by
+position (`GROUP BY 1`) because grouping by the alias `category` picked the
+column `m.category`. Top merchants and recurring stay merchant-level. Ledger
+migration 4 re-runs the rules and sends every merchant still in `car` back
+to uncategorised. The categorise prompt has hints for the new keys.
+
+---
+
 ## 0.3.3 - Start here
 
 Søren: "Økonomi should be user based - every user with access needs its own

@@ -166,7 +166,7 @@ def test_not_a_bank_export_says_so():
      "Davidsens Tømmerhandel", "home"),
     ("Visa/Dankort MCDKOLDING, KOLDING, Nota nr. 45938", -8900, "card", "McDonald's", "fast-food"),
     ("Visa/Dankort MCD VEJLE DTC, VEJLE, Nota nr. 01389", -8900, "card", "McDonald's", "fast-food"),
-    ("Q8 SERVICE - 8253, VOJENS Notanr 95659", -4400, "card", "Q8", "car"),
+    ("Q8 SERVICE - 8253, VOJENS Notanr 95659", -4400, "card", "Q8", "fuel"),
     ("Visa/Dankort PAYPAL *STEAM GAMES, 35314369001, Nota nr. 19425", -20919, "card", "Steam", "leisure"),
     ("Pengeautomat 8079 Trans.nr.      1030", -200000, "atm", "Cash withdrawal", "cash"),
     ("MobilePay: MobilePay Mette Hansen", -15000, "mobilepay", "Mette Hansen", "people"),
@@ -571,3 +571,56 @@ def test_migration_moves_existing_merchants_to_the_finer_categories(fresh_db):
     assert got["rk"] == ("mortgage", "rule")
     assert got["mine"] == ("eating-out", "user")          # user choice untouched
     assert moved >= 4
+
+
+# ---- 0.3.4: the car split, the fuel station's shop, children ----------------------------
+
+def test_every_category_has_one_place_in_the_picker():
+    from app.sections.ledger import ledger
+    keys = [k for _, ks in ledger.CATEGORY_GROUPS for k in ks]
+    assert sorted(keys) == sorted(ledger.CATEGORIES) and len(keys) == len(set(keys)) == 40
+    assert ledger.CATEGORY_GROUPS[0][0] == "Hus & bolig" and ledger.CATEGORY_GROUPS[1][0] == "Bil & transport"
+    assert "car" not in ledger.CATEGORIES
+
+
+@pytest.mark.parametrize("text, category", [
+    ("Betalingsservice MOTORSTYRELSEN Vægtafgift", "car-tax"),
+    ("Visa/Dankort THANSEN VOJENS Nota 1", "car-maintenance"),
+    ("kontaktløs Dankort Clever Ladestander Nota 2", "fuel"),
+    ("Betalingsservice VOJENS KOMMUNE PLADSANVISNING", "children"),
+    ("kontaktløs Dankort BabySam Kolding Nota 3", "children"),
+])
+def test_the_new_rules(text, category):
+    from app.sections.ledger import ledger
+    c = ledger.classify(text, -50000)
+    rule = ledger.rule_for(c["merchant"], text)
+    assert rule is not None and rule[1] == category, (c, rule)
+
+
+def test_a_small_purchase_at_a_fuel_station_is_the_station_shop(fresh_db):
+    from app.sections.ledger import ledger
+    rows = [{"date": "2026-09-01", "text": "Q8 SERVICE - 8253, VOJENS Notanr 1", "amount": -55000, "currency": "DKK"},
+            {"date": "2026-09-02", "text": "Q8 SERVICE - 8253, VOJENS Notanr 2", "amount": -4500, "currency": "DKK"}]
+    ledger.import_rows(1, "Løn", "a.csv", rows)
+    o = ledger.overview(1, "2026-09-01", "2026-09-30")
+    cats = {c["key"]: c["spent"] for c in o["categories"]}
+    assert cats == {"fuel": 550.0, "gas-station": 45.0}
+    t = ledger.transactions(1, category="gas-station")
+    assert t["total"] == 1 and t["rows"][0]["category"] == "gas-station"
+    assert ledger.transactions(1, category="fuel")["rows"][0]["amount"] == -550.0
+
+
+def test_migration_4_moves_the_old_car_category(fresh_db):
+    from app.core import db
+    from app.sections.ledger import _m004_car_split
+    with db.connect() as con:
+        for key, name, sample, src in (("q8", "Q8", "Q8 SERVICE VOJENS", "rule"),
+                                       ("bilmand", "Bilmanden", "BILMANDEN APS", "model"),
+                                       ("lars", "Lars' garage", "LARS GARAGE", "user")):
+            con.execute("INSERT INTO ledger_merchants (user_id, merchant_key, name, category, source, sample,"
+                        " updated_at) VALUES (1, ?, ?, 'car', ?, ?, 'x')", (key, name, src, sample))
+        _m004_car_split(con)
+        got = {r[0]: (r[1], r[2]) for r in con.execute(
+            "SELECT merchant_key, category, source FROM ledger_merchants")}
+    assert got["q8"] == ("fuel", "rule")
+    assert got["bilmand"] == ("", "none") and got["lars"] == ("", "none")       # back to "Mangler kategori"

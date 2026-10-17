@@ -176,7 +176,8 @@ async def okonomi_ask_stop(request: Request):
 # ---- your own data (0.3.3) ------------------------------------------------------------------------
 
 def _categories() -> list[dict]:
-    return [{"key": k, "name": v[1]} for k, v in ledger.CATEGORIES.items()]
+    return [{"key": k, "name": ledger.CATEGORIES[k][1], "group": g}
+            for g, keys in ledger.CATEGORY_GROUPS for k in keys]
 
 
 @router.get("/api/okonomi/data")

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CategoryOptions } from './CategoryOptions';
 import {
   kr, ledgerApi, monthLabel,
   type CategoriseState, type LedgerAsk, type LedgerCategory, type LedgerImportResult,
@@ -680,7 +681,7 @@ function TxTable({ rows, categories, onCategory }: {
                           title="The merchant's category - changes every row of this merchant"
                           onChange={(e) => onCategory(r, e.target.value)}>
                     {!r.category && <option value="">Not categorised</option>}
-                    {categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    <CategoryOptions categories={categories} label={(c) => c.label} />
                   </select>
                 ) : <span className="dim">{catLabel(categories, r.category)}</span>}
               </td>
@@ -744,7 +745,7 @@ function TransactionsTab({ summary, filter, onChanged }: {
         <select value={category} onChange={(e) => { setCategory(e.target.value); setOffset(0); }}>
           <option value="*">All categories</option>
           <option value="">Not categorised</option>
-          {summary.categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          <CategoryOptions categories={summary.categories} label={(c) => c.label} />
         </select>
         <select value={direction} onChange={(e) => { setDirection(e.target.value); setOffset(0); }}>
           <option value="">In and out</option><option value="out">Money out</option><option value="in">Money in</option>
@@ -828,7 +829,7 @@ function MerchantsTab({ summary, onChanged, onOpenTx }: {
         <select value={category} onChange={(e) => setCategory(e.target.value)}>
           <option value="*">All categories</option>
           <option value="">Not categorised ({summary.uncategorised})</option>
-          {summary.categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+          <CategoryOptions categories={summary.categories} label={(c) => c.label} />
         </select>
       </div>
       <p className="fma-note led-pad-x">
@@ -862,7 +863,7 @@ function MerchantsTab({ summary, onChanged, onOpenTx }: {
                   <select className="led-cat-select" value={m.category}
                           onChange={(e) => void change(m, { category: e.target.value })}>
                     {!m.category && <option value="">Not categorised</option>}
-                    {summary.categories.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                    <CategoryOptions categories={summary.categories} label={(c) => c.label} />
                   </select>
                 </td>
                 <td className="dim">{SOURCE_LABEL[m.source] ?? m.source}</td>

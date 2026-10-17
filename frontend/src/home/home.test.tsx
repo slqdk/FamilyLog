@@ -209,7 +209,7 @@ describe('Økonomi on the phone', () => {
       firstDate: null, lastDate: null, uncategorised: 0, months: [], model: false, ask: null });
     const data = { imports: [], accounts: [], count: 0, left: 1, model: false,
       uncategorised: [{ key: 'zxq', name: 'Zxq Butik', sample: 'ZXQ', count: 2, total: -300 }],
-      categorise: { state: 'none', left: 1 }, categories: [{ key: 'groceries', name: 'Dagligvarer' }] };
+      categorise: { state: 'none', left: 1 }, categories: [{ key: 'rent', name: 'Husleje', group: 'Hus & bolig' }, { key: 'groceries', name: 'Dagligvarer', group: 'Mad' }] };
     vi.spyOn(homeApi, 'okData').mockResolvedValue(data);
     const imp = vi.spyOn(homeApi, 'okImport').mockResolvedValue({ added: 12, alreadyThere: 0, rowsInFile: 12, uncategorised: 1, skipped: 0 });
     const place = vi.spyOn(homeApi, 'okSetCategory').mockResolvedValue({ ok: true });
@@ -220,7 +220,9 @@ describe('Økonomi on the phone', () => {
     fireEvent.change(document.querySelector('.ok-pick input[type=file]')!, { target: { files: [file] } });
     await waitFor(() => expect(imp).toHaveBeenCalledWith(file, 'Lønkonto'));
     expect(await screen.findByText('12 nye posteringer.')).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Kategori for Zxq Butik'), { target: { value: 'groceries' } });
+    const pick = screen.getByLabelText('Kategori for Zxq Butik');
+    expect([...pick.querySelectorAll('optgroup')].map((g) => g.getAttribute('label'))).toEqual(['Hus & bolig', 'Mad']);
+    fireEvent.change(pick, { target: { value: 'groceries' } });
     await waitFor(() => expect(place).toHaveBeenCalledWith('zxq', 'groceries'));
   });
 });

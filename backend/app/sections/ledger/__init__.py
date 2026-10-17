@@ -91,13 +91,24 @@ def _m003_access(con: sqlite3.Connection) -> None:
     """)
 
 
+def _m004_car_split(con: sqlite3.Connection) -> None:
+    """0.3.4: "Bil & brændstof" split into Billån, Bilafgifter,
+    Bilvedligeholdelse and Brændstof (+ Tankstationer, Børn). The rules place
+    again what they know; a merchant still in the old category - the model's
+    or a hand choice that no longer exists - goes back to "Mangler kategori"."""
+    from . import ledger
+    ledger.reapply_rules(con)
+    con.execute("UPDATE ledger_merchants SET category='', source='none' WHERE category='car'")
+
+
 SECTION = Section(
     id="ledger",
     title="Økonomi",
     router=router,
     migrations=[(1, "ledger tables (SLQ _m048)", _m001_ledger),
                 (2, "family read access", _m002_viewers),
-                (3, "Økonomi per person: family access", _m003_access)],
+                (3, "Økonomi per person: family access", _m003_access),
+                (4, "car split, fuel station shop, children", _m004_car_split)],
     family_prefixes=("/api/okonomi/",),
     reset=ledger_ask.reset,
 )

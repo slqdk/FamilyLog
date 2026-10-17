@@ -128,7 +128,11 @@ Hints:
 - Supermarkets and butchers in Denmark -> groceries. Border shops and shops in Germany
   (Fleggaard, Calle, Edeka, Rewe, Citti, German towns) -> germany-shopping.
 - AliExpress, Temu, Shein, Wish and other Chinese web shops -> china-shopping.
-- Petrol stations and car parts -> car. Parking, bridges, public transport -> transport.
+- Petrol stations and EV charging -> fuel (never gas-station; the app splits small purchases
+  there by itself). Garages, tyres, car wash, car parts -> car-maintenance. Motorstyrelsen,
+  weight and ownership tax -> car-tax. Car loans and leasing -> car-loan.
+  Parking, bridges, public transport -> transport.
+- Childcare, kindergarten, SFO, toys, children's shops -> children.
 - Building materials, tools, garden, furniture, plumbing supplies -> home.
 - Web shops for computer parts, cables, gadgets, 3D printing -> electronics.
 - Netflix, Disney+, HBO, Viaplay, Spotify, YouTube Premium -> streaming. TV providers

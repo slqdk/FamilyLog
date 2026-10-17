@@ -88,7 +88,7 @@ def test_she_places_merchants_and_deletes_an_import(client):
     imp = mor.post("/api/okonomi/import", files={"file": ("mor.csv", _unknown_shops(), "text/csv")}).json()
     assert imp["added"] == 3, imp
     d = mor.get("/api/okonomi/data").json()
-    assert d["left"] == 3 and len(d["uncategorised"]) == 3 and len(d["categories"]) == 35
+    assert d["left"] == 3 and len(d["uncategorised"]) == 3 and len(d["categories"]) == 40
     assert d["imports"][0]["id"] == imp["importId"]
     key = d["uncategorised"][0]["key"]
     assert mor.put("/api/okonomi/merchant", json={"key": key, "category": "groceries"}).status_code == 200

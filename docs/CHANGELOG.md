@@ -2,6 +2,31 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.4 - 2026-10-17
+
+Søren's first pass over the Økonomi categories.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`. Afterwards, look
+at **Mangler kategori** (front page → Økonomi → Dine data, or the admin
+app): shops that were in "Bil & brændstof" and that no rule knows - placed
+by the model or by hand - are back there to be placed in the new
+categories (or press "Lad Alf placere dem").
+
+- **"Bil & brændstof" is split** into **Billån**, **Bilafgifter**,
+  **Bilvedligeholdelse** and **Brændstof** (fuel and charging). The rules
+  follow: fuel stations and chargers → Brændstof; Thansen, garages, tyres,
+  car wash → Bilvedligeholdelse; Motorstyrelsen, weight/ownership tax →
+  Bilafgifter; car loans and leasing → Billån.
+- **Tankstationer** (new): a purchase at a fuel station under 300 kr is
+  the station's shop (coffee, hotdogs) and counts as Tankstationer;
+  300 kr and more is Brændstof. Decided per purchase.
+- **Børn** (new): childcare (pladsanvisning, dagpleje, børnehave,
+  vuggestue, SFO, fritidsklub), toys and children's shops.
+- **The category picker is in sections**: Hus & bolig, Bil & transport,
+  Mad, Børn, Indkøb, Faste udgifter & abonnementer, Sundhed & pleje,
+  Fritid & rejser, Penge, Andet - on the phone and in the admin app.
+- 40 categories now (was 35).
+
 ## 0.3.3 - 2026-10-17
 
 Økonomi per person.

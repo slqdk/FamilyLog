@@ -314,6 +314,8 @@ with sync_playwright() as p:
     ph.locator(".ok-cat").first.click()
     ph.wait_for_selector(".ok-tx-row", timeout=10000)
     check("a category opens its transactions", ph.locator(".ok-tx-row").count() > 0)
+    cats = ph.locator(".ok-cat-name").all_inner_texts()
+    check("Q8 shows as Brændstof after the car split (0.3.4)", "Brændstof" in cats and "Bil & brændstof" not in cats, str(cats))
     sw = ph.evaluate("document.documentElement.scrollWidth")
     check("phone Økonomi fits the phone", sw <= 390, f"scrollWidth {sw}")
     ph.screenshot(path=f"{OUT}/12-okonomi-phone.png", full_page=True)
@@ -357,6 +359,11 @@ with sync_playwright() as p:
         files=[{"name": "mor.csv", "mimeType": "text/csv", "buffer": synthetic_export()}])
     fp.wait_for_selector(".ok-hero", timeout=30000)
     check("mor reads in her own bank export on the phone", "kr" in fp.locator(".ok-hero-num").inner_text())
+    fp.locator(".ok-data-head").click()
+    fp.wait_for_selector(".ok-uncat select, .ok-imports", timeout=15000)
+    if fp.locator(".ok-uncat select").count():
+        groups = fp.locator(".ok-uncat select").first.evaluate("s => [...s.querySelectorAll('optgroup')].map(g => g.label)")
+        check("the category picker is in sections, house first, then car", groups[:2] == ["Hus & bolig", "Bil & transport"], str(groups))
     check("the admin's Økonomi is untouched by hers",
           ph.request.get(BASE + "/api/okonomi/state").json()["count"] == admin_count)
     fp.locator(".ok-ask-row input").fill("Hvor meget hos Davidsens?")
