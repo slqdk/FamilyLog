@@ -110,46 +110,40 @@ def category_da(key: str) -> str:
     return CATEGORIES.get(key, ("", "Ikke kategoriseret"))[1] if key else "Ikke kategoriseret"
 
 
-# ---- who may read whose ledger (0.3.0) -----------------------------------------------------------
-# A ledger is one admin/user account's own. The administrator can give a
-# family account read access to one such ledger (the phone page: overview,
-# transactions, asking Alf). Import, categories and clearing stay the
-# owner's, in the admin app - the family API has no route for them.
+# ---- who has an Økonomi (0.3.3) ------------------------------------------------------------------
+# Søren: "Økonomi should be user based - every user with access needs its own
+# data." Every admin and user account has its own ledger; a family account
+# has one when the administrator turns Økonomi on for it. Nobody reads
+# anyone else's ledger - the queries all take the signed-in person's id.
+# (0.3.0's read access to another account's ledger is gone; its table,
+# ledger_viewers, stays unused - migrations only add.)
 
-def viewers() -> list[dict]:
+def access_list() -> list[int]:
+    """Family accounts with Økonomi turned on."""
     with db.connect() as con:
-        return [{"userId": r["user_id"], "ownerId": r["owner_id"]} for r in con.execute(
-            "SELECT user_id, owner_id FROM ledger_viewers ORDER BY user_id")]
+        return [r[0] for r in con.execute("SELECT user_id FROM ledger_access ORDER BY user_id")]
 
 
-def set_viewer(user_id: int, owner_id: int | None) -> None:
+def set_access(user_id: int, on: bool) -> None:
     with db.connect() as con:
         u = con.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if u is None:
             raise Invalid("No such account.")
-        if owner_id is None:
-            con.execute("DELETE FROM ledger_viewers WHERE user_id=?", (user_id,))
-            return
         if u["role"] != "family":
-            raise Invalid("Only family accounts are given access; admin and user accounts "
-                          "have their own Økonomi.")
-        o = con.execute("SELECT role FROM users WHERE id=?", (owner_id,)).fetchone()
-        if o is None or o["role"] not in ("admin", "user"):
-            raise Invalid("The Økonomi shared must be an admin or user account's.")
-        con.execute("INSERT INTO ledger_viewers (user_id, owner_id) VALUES (?, ?)"
-                    " ON CONFLICT(user_id) DO UPDATE SET owner_id=excluded.owner_id",
-                    (user_id, owner_id))
+            raise Invalid("Admin and user accounts always have their own Økonomi.")
+        if on:
+            con.execute("INSERT OR IGNORE INTO ledger_access (user_id) VALUES (?)", (user_id,))
+        else:
+            con.execute("DELETE FROM ledger_access WHERE user_id=?", (user_id,))
 
 
 def ledger_for(me: dict) -> int | None:
-    """Whose ledger this signed-in person reads on the phone page: their own
-    (admin/user), the one they were given (family), or None."""
+    """The signed-in person's own ledger, or None when they have no Økonomi."""
     if me["role"] in ("admin", "user"):
         return me["id"]
     with db.connect() as con:
-        r = con.execute("SELECT owner_id FROM ledger_viewers WHERE user_id=?",
-                        (me["id"],)).fetchone()
-    return r["owner_id"] if r else None
+        r = con.execute("SELECT 1 FROM ledger_access WHERE user_id=?", (me["id"],)).fetchone()
+    return me["id"] if r else None
 
 
 # ---- merchant rules -------------------------------------------------------------

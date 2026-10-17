@@ -515,12 +515,6 @@ def forget(user_id: int) -> None:
     _asks.pop(user_id, None)
 
 
-def forget_viewers_of(ledger_uid: int) -> None:
-    """Other people's asks about this ledger (it was cleared)."""
-    for uid in [u for u, a in _asks.items() if u != ledger_uid and a.get("_ledger") == ledger_uid]:
-        forget(uid)
-
-
 def reset(user_id: int | None = None) -> None:
     """Tests and 'clear the ledger'."""
     if user_id is None:

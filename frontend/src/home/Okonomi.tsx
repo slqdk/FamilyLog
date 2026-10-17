@@ -1,31 +1,35 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Markdown } from '../core/Markdown';
-import { homeApi, type OkAsk, type OkMonth, type OkState, type OkTx } from './api';
+import { homeApi, type OkAsk, type OkData, type OkMonth, type OkState, type OkTx } from './api';
 import { Bar } from './Dagbog';
 import { addMonths, kr, monthTitle, routeHash, shortDate } from './logic';
 
-/** Økonomi on the phone (FamilyLog 0.3.0): one month at a time - what went
-    out, where, compared with a usual month - and Alf to ask. Read only:
-    importing and categories stay in the admin app. A family account the
-    administrator gave access reads that account's Økonomi. */
-export function OkonomiPage({ month }: { month: string | null }) {
+/** Økonomi on the phone (FamilyLog 0.3.0; per person 0.3.3): your own bank
+    data, one month at a time - what went out, where, compared with a usual
+    month - Alf to ask, and "Dine data": import a bank export, place the
+    shops no rule knows. Nobody sees anyone else's. */
+export function OkonomiPage({ month, me }: { month: string | null; me?: { role: string } }) {
   const [st, setSt] = useState<OkState | null>(null);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { homeApi.okState().then(setSt).catch((e) => setError(e.message)); }, []);
+  const [version, setVersion] = useState(0);
+  useEffect(() => { homeApi.okState().then(setSt).catch((e) => setError(e.message)); }, [version]);
+  const reload = () => setVersion((v) => v + 1);
 
   if (error) return <Shell><p className="fm-error">{error}</p></Shell>;
   if (!st) return <Shell><p className="fm-note">Henter…</p></Shell>;
   if (!st.access) {
-    return <Shell><section className="fm-sheet hm-field"><p>Du har ikke adgang til Økonomi.</p>
-      <p className="fm-dim">Administratoren kan give adgang under Indstillinger → Accounts.</p></section></Shell>;
+    return <Shell><section className="fm-sheet hm-field"><p>Du har ikke Økonomi.</p>
+      <p className="fm-dim">Administratoren kan slå det til for dig under Indstillinger → Accounts.</p></section></Shell>;
   }
   if (st.count === 0) {
     return (
       <Shell>
         <section className="fm-sheet hm-field">
-          <p>Der er ingen posteringer endnu.</p>
-          {st.own && <a className="fm-link" href="/app/#ledger">Importér en bankudskrift i admin-appen</a>}
+          <h3 className="hm-field-label">Kom i gang</h3>
+          <p>Hent en udskrift af dine posteringer i netbanken (CSV eller Excel) og læs den ind her.
+            Kun du kan se dine tal.</p>
         </section>
+        <DataSection onChange={reload} open />
       </Shell>
     );
   }
@@ -33,7 +37,6 @@ export function OkonomiPage({ month }: { month: string | null }) {
   const m = month && months.includes(month) ? month : months[months.length - 1];
   return (
     <Shell>
-      {!st.own && <p className="ok-whose">Du ser {st.owner}s økonomi · kun læsning</p>}
       <div className="hm-daynav">
         {m > months[0]
           ? <a className="hm-step" aria-label="Måneden før" href={routeHash({ name: 'okonomi', month: addMonths(m, -1) })}>‹</a>
@@ -43,15 +46,114 @@ export function OkonomiPage({ month }: { month: string | null }) {
           ? <a className="hm-step" aria-label="Måneden efter" href={routeHash({ name: 'okonomi', month: addMonths(m, 1) })}>›</a>
           : <span className="hm-step hm-step-off" aria-hidden>›</span>}
       </div>
-      <Month month={m} />
+      <Month month={m} key={`${m}|${version}`} />
       <Ask initial={st.ask} model={st.model} />
-      {st.own && (
-        <p className="ok-foot">
-          {st.uncategorised > 0 && <>{st.uncategorised} butikker mangler kategori. </>}
-          <a href="/app/#ledger">Import og kategorier i admin-appen</a>
-        </p>
+      <DataSection onChange={reload} />
+      {me && me.role !== 'family' && (
+        <p className="ok-foot"><a href="/app/#ledger">Økonomi i admin-appen</a></p>
       )}
     </Shell>
+  );
+}
+
+/** Your own data: import a bank export, the imports so far, and the shops
+    still without a category (pick one, or let the model place them). */
+function DataSection({ onChange, open = false }: { onChange: () => void; open?: boolean }) {
+  const [d, setD] = useState<OkData | null>(null);
+  const [show, setShow] = useState(open);
+  const [account, setAccount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(() => homeApi.okData().then(setD).catch((e) => setError(e.message)), []);
+  useEffect(() => { if (show) void load(); }, [show, load]);
+  const running = d?.categorise.state === 'queued' || d?.categorise.state === 'working';
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setInterval(() => { void load(); }, 1500);
+    return () => window.clearInterval(t);
+  }, [running, load]);
+
+  async function upload(file: File | undefined) {
+    if (!file) return;
+    setBusy(true); setError(null); setNote(null);
+    try {
+      const r = await homeApi.okImport(file, account.trim() || 'Bank');
+      setNote(`${r.added} nye posteringer${r.alreadyThere ? `, ${r.alreadyThere} kendte i forvejen` : ''}.`);
+      await load(); onChange();
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }
+  async function place(key: string, category: string) {
+    if (!category) return;
+    setError(null);
+    try { await homeApi.okSetCategory(key, category); await load(); onChange(); }
+    catch (e) { setError((e as Error).message); }
+  }
+
+  return (
+    <section className="fm-sheet hm-field ok-data" aria-label="Dine data">
+      <button className="ok-data-head" aria-expanded={show} onClick={() => setShow(!show)}>
+        <h3 className="hm-field-label">Dine data</h3>
+        <span>{show ? '▴' : '▾'}</span>
+      </button>
+      {show && (
+        <>
+          <div className="ok-import">
+            <input value={account} maxLength={60} placeholder="Konto, fx Lønkonto" aria-label="Konto"
+                   onChange={(e) => setAccount(e.target.value)} />
+            <label className={`fm-secondary ok-pick${busy ? ' ok-busy' : ''}`}>
+              {busy ? 'Læser…' : 'Læs bankudskrift ind'}
+              <input type="file" accept=".csv,.txt,.xlsx,text/csv" hidden disabled={busy}
+                     onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          </div>
+          <p className="ok-note">CSV eller Excel fra netbanken. Posteringer, der allerede er her, bliver genkendt.</p>
+          {note && <p className="ok-ok">{note}</p>}
+          {error && <p className="fm-error">{error}</p>}
+          {d && d.left > 0 && (
+            <div className="ok-uncat">
+              <h4>Mangler kategori ({d.left})</h4>
+              {running && <p className="fm-dim">Alf placerer butikkerne… {d.categorise.left} tilbage</p>}
+              {!running && d.model && (
+                <button className="fm-link" onClick={async () => {
+                  try { setD(await homeApi.okCategorise()); } catch (e) { setError((e as Error).message); }
+                }}>Lad Alf placere dem</button>
+              )}
+              <ul className="ok-list">
+                {d.uncategorised.slice(0, 25).map((u) => (
+                  <li key={u.key} className="ok-row ok-row-static">
+                    <span><span className="ok-row-name">{u.name}</span>
+                      <small>{u.count} {u.count === 1 ? 'gang' : 'gange'} · {kr(u.total)}</small></span>
+                    <select aria-label={`Kategori for ${u.name}`} value="" onChange={(e) => void place(u.key, e.target.value)}>
+                      <option value="">Vælg…</option>
+                      {d.categories.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+                    </select>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {d && d.imports.length > 0 && (
+            <div className="ok-imports">
+              <h4>Indlæst</h4>
+              <ul className="ok-list">
+                {d.imports.map((i) => (
+                  <li key={i.id} className="ok-row ok-row-static">
+                    <span><span className="ok-row-name">{i.account}</span>
+                      <small>{i.filename} · {i.added} nye{i.firstDate ? ` · ${shortDate(i.firstDate)} - ${shortDate(i.lastDate!)}` : ''}</small></span>
+                    <button className="fm-link fm-danger" onClick={async () => {
+                      if (!confirm(`Slet de ${i.added} posteringer fra ${i.filename}?`)) return;
+                      try { await homeApi.okDeleteImport(i.id); await load(); onChange(); }
+                      catch (e) { setError((e as Error).message); }
+                    }}>Slet</button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

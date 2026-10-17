@@ -40,11 +40,13 @@ phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
 Cyklus. Family accounts land there when they sign in and can reach nothing
 in this admin app. On a phone, "Add to home screen" makes it an app icon.
 
-**Økonomi** on the front page is read only: one month at a time (what went
-out, per category against a normal month, the biggest receivers, fixed
-costs) and Alf to ask. Administrator and user accounts see their own;
-a family account sees the one the administrator chose under Settings →
-Accounts, or none. Importing and categories stay here in the admin app.
+**Økonomi** on the front page is each person's own (0.3.3): one month at a
+time (what went out, per category against a normal month, the biggest
+receivers, fixed costs), Alf to ask, and **Dine data** - read in a bank
+export (CSV or Excel), delete an import, place the shops no rule knows, or
+let the model place them. Administrator and user accounts always have it; a
+family account when the administrator turns it on (Settings → Accounts).
+Nobody sees anyone else's Økonomi - the administrator included.
 
 **Cyklus** is for accounts set to female (Settings → Accounts): a period
 log with symptoms, mood and a note, the cycle day and phase, the next
@@ -173,7 +175,7 @@ exports. The container's `APP_TIMEZONE` pins it.
 title: Accounts
 where: Settings
 since: 0.1.0
-changed: 0.3.0
+changed: 0.3.3
 
 Everyone who can sign in. **user** accounts use the app (each has their own
 Økonomi); at most 3 accounts in all for administrator and users. **family**
@@ -181,10 +183,10 @@ accounts use the front page and Alf's Atlas only and do not count towards
 the limit (FamilyMap → Family accounts lists them too).
 
 **gender**: an account set to *female* gets Cyklus on the front page.
-**Økonomi** (family accounts only): *reads <name>'s* gives read-only access
-to that account's Økonomi on the front page - the month, the transactions
-and asking Alf; never import, categories or clearing. Changing or removing
-it also drops the answer Alf last gave that person. **Password** sets a new
+**Økonomi** (family accounts only): *own data* gives that person their own
+Økonomi on the front page - their own bank exports, categories and Alf
+answers, seen by nobody else. Turning it off hides it (the data stays for
+when it is turned on again) and drops the answer Alf last gave them. **Password** sets a new
 one and signs that person out; **Sign out** ends their sessions;
 **Delete** removes the login - their FamilyMap reviews stay, shown as
 "slettet bruger".

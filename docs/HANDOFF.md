@@ -5,6 +5,24 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.3 - Start here
+
+Søren: "Økonomi should be user based - every user with access needs its own
+data." Ledger migration 3 adds `ledger_access(user_id)` (family accounts
+with Økonomi) and copies 0.3.0's `ledger_viewers` rows into it (now unused,
+kept - migrations only add). `ledger.ledger_for(me)` returns `me["id"]` for
+admin/user, and for family only when in `ledger_access`; there is no path
+to another person's ledger any more. `/api/ledger/viewers` is gone;
+`GET/PUT /api/ledger/access {userId, on}` (admin). Phone API additions in
+`okonomi_routes.py`: `GET /api/okonomi/data`, `POST /api/okonomi/import`,
+`DELETE /api/okonomi/imports/{id}`, `PUT /api/okonomi/merchant`,
+`POST /api/okonomi/categorise` - all on the caller's own ledger.
+Frontend: `DataSection` in `src/home/Okonomi.tsx`; `OkonomiPage` takes `me`
+(the admin-app link only for non-family). Categories are still the code's
+`CATEGORIES` (35); Søren is reviewing the list.
+
+---
+
 ## 0.3.2 - Start here
 
 Søren reversed "no migration": `app/sections/familymap/atlas_import.py`

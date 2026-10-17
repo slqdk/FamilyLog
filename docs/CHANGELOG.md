@@ -2,6 +2,26 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.3 - 2026-10-17
+
+Økonomi per person.
+
+**ACTION REQUIRED**:
+1. `cd /opt/familylog && bash update.sh`.
+2. A family account that could read someone's Økonomi (0.3.0) now has its
+   **own, empty** Økonomi instead - they read in their own bank export on
+   the front page (Økonomi → Dine data). Settings → Accounts shows
+   **Økonomi: own data** for them; set **no** where that is not wanted.
+
+- **Every person with Økonomi has their own data.** Admin and user accounts
+  always; family accounts when you turn it on. Nobody reads anyone else's.
+- **Dine data on the phone page**: read in a bank export (CSV or Excel)
+  with an account name, see and delete imports, place the shops no rule
+  knows (a list with a category picker), or let the model place them.
+  New Økonomi starts with "Kom i gang".
+- Settings → Accounts: *Økonomi: own data / no* for family accounts
+  (replaces "reads <name>'s").
+
 ## 0.3.2 - 2026-10-17
 
 Alf's Atlas comes over from SLQ Companion after all.

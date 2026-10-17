@@ -186,6 +186,19 @@
   border-radius: 24px; padding: 4px 4px 4px 14px; }
 .ok-ask-row input { flex: 1; min-width: 0; border: none; background: none; padding: 8px 0; font-size: 16px; }
 .ok-ask-row input:focus { outline: none; }
+.ok-data-head { width: 100%; display: flex; justify-content: space-between; align-items: center; border: none;
+  background: none; padding: 0; color: var(--fm-ink); }
+.ok-data-head .hm-field-label { margin: 0; }
+.ok-data-head + * { margin-top: 12px; }
+.ok-import { display: flex; gap: 8px; flex-wrap: wrap; }
+.ok-import input { flex: 1 1 10em; min-width: 0; padding: 10px 12px; border-radius: 14px; border: 1.5px solid var(--fm-line);
+  background: #fffdf7; font-size: 16px; }
+.ok-pick { flex: 1 1 10em; text-align: center; border-radius: 14px; padding: 10px 12px; font-weight: 700; cursor: pointer; }
+.ok-busy { opacity: .6; }
+.ok-ok { color: var(--fm-olive-deep); font-weight: 700; margin: 8px 0 0; }
+.ok-uncat h4, .ok-imports h4 { margin: 16px 0 4px; font-size: 15px; }
+.ok-uncat select { flex: none; max-width: 46%; padding: 6px 8px; border-radius: 10px; border: 1.5px solid var(--fm-line);
+  background: #fffdf7; font-size: 14px; }
 .ok-foot { margin: 0 16px 16px; text-align: center; font-size: 14px; color: #fbf8f0;
   text-shadow: 0 1px 2px rgba(40, 50, 30, .35); }
 .ok-foot a { color: #fbf8f0; }

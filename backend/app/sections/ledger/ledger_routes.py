@@ -2,8 +2,8 @@
 
 Everything is the signed-in person's own ledger (user_id from the session).
 A family account never gets here (auth.family_allows keeps it out of
-/api/ledger); one given read access uses the phone page's /api/okonomi
-(okonomi_routes.py, 0.3.0).
+/api/ledger); one with Økonomi uses the phone page's /api/okonomi
+(okonomi_routes.py) - its own ledger there too.
 """
 from __future__ import annotations
 
@@ -16,24 +16,24 @@ from . import ledger, ledger_ask
 router = APIRouter()
 
 
-@router.get("/api/ledger/viewers")
-def ledger_viewers(request: Request):
-    """Which family account reads which Økonomi (administrator)."""
+@router.get("/api/ledger/access")
+def ledger_access(request: Request):
+    """Family accounts with their own Økonomi (administrator)."""
     _admin(request)
-    return ledger.viewers()
+    return ledger.access_list()
 
 
-class ViewerBody(BaseModel):
+class AccessBody(BaseModel):
     userId: int
-    ownerId: int | None = None
+    on: bool
 
 
-@router.put("/api/ledger/viewers")
-def ledger_viewer_set(body: ViewerBody, request: Request):
+@router.put("/api/ledger/access")
+def ledger_access_set(body: AccessBody, request: Request):
     _admin(request)
-    _call(ledger.set_viewer, body.userId, body.ownerId)
-    ledger_ask.forget(body.userId)          # an answer about the old ledger goes with the access
-    return ledger.viewers()
+    _call(ledger.set_access, body.userId, body.on)
+    ledger_ask.forget(body.userId)
+    return ledger.access_list()
 
 
 def _admin(request: Request) -> None:
@@ -91,7 +91,6 @@ async def ledger_clear(request: Request):
     ledger_ask.stop(uid)
     ledger.clear(uid)
     ledger_ask.reset(uid)
-    ledger_ask.forget_viewers_of(uid)
     return {"cleared": True}
 
 

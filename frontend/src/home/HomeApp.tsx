@@ -47,7 +47,7 @@ export function HomeApp() {
 
   if (route.name === 'dagbog') return <DagbogPage day={route.day ?? todayLocal()} />;
   if (route.name === 'family') return <FamilyWeek me={me} week={route.week} />;
-  if (route.name === 'okonomi') return <OkonomiPage month={route.month} />;
+  if (route.name === 'okonomi') return <OkonomiPage month={route.month} me={me} />;
   if (route.name === 'cyklus') return <CyklusPage />;
   if (route.name === 'cyklusDay') return <CyklusDayPage day={route.day} />;
   if (route.name === 'cyklusCal') return <CyklusCalendar month={route.month} />;
@@ -144,7 +144,7 @@ export function Shortcuts({ me: _me, atlas }: { me: FmUser; atlas: string }) {
         <a className="hm-tile" href={routeHash({ name: 'okonomi', month: null })}>
           <span className="hm-tile-icon" aria-hidden>💰</span>
           <span className="hm-tile-name">Økonomi</span>
-          <span className="hm-tile-sub">{ok.own ? 'Konti og forbrug' : `${ok.owner}s forbrug`}</span>
+          <span className="hm-tile-sub">{ok.count ? 'Konti og forbrug' : 'Læs din bank ind'}</span>
         </a>
       )}
       {cyLine !== null && (

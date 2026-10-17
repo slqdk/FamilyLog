@@ -287,7 +287,7 @@ function SearchGroup({ value, set, pinned, keySet }: { value: Value; set: Setter
 
 function AccountsGroup({ meId }: { meId: number }) {
   const [users, setUsers] = useState<UserDto[]>([]);
-  const [viewers, setViewers] = useState<Map<number, number>>(new Map());
+  const [economy, setEconomy] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -297,10 +297,8 @@ function AccountsGroup({ meId }: { meId: number }) {
   const [newPassword, setNewPassword] = useState('');
   const load = useCallback(() => {
     api.users().then(setUsers).catch((e) => setError((e as Error).message));
-    api.economyViewers().then((v) => setViewers(new Map(v.map((x) => [x.userId, x.ownerId]))))
-      .catch((e) => setError((e as Error).message));
+    api.economyAccess().then((v) => setEconomy(new Set(v))).catch((e) => setError((e as Error).message));
   }, []);
-  const owners = users.filter((u) => u.role !== 'family');
   useEffect(load, [load]);
 
   const run = async (fn: () => Promise<unknown>, done: string) => {
@@ -312,7 +310,7 @@ function AccountsGroup({ meId }: { meId: number }) {
   return (
     <Group title="Accounts" help="settings.accounts">
       <p className="settings-note">Family accounts use the front page (/) and Alf's Atlas only and do not count
-        towards the account limit. A family account can be given read-only access to one person's Økonomi.
+        towards the account limit. Everyone with Økonomi has their own data; a family account gets it when you turn it on here.
         Accounts set to female get Cyklus; what she shares, she decides herself.</p>
       <ul className="user-list">
         {users.map((u) => (
@@ -328,12 +326,12 @@ function AccountsGroup({ meId }: { meId: number }) {
               <option value="male">male</option>
             </select>
             {u.role === 'family' && (
-              <select className="user-pick" aria-label={`Økonomi for ${u.username}`} value={viewers.get(u.id) ?? ''}
-                      title="Read-only Økonomi on the front page"
-                      onChange={(e) => void run(() => api.setEconomyViewer(u.id, e.target.value ? Number(e.target.value) : null),
-                        e.target.value ? `${u.username} can now read that Økonomi.` : `${u.username} no longer sees Økonomi.`)}>
+              <select className="user-pick" aria-label={`Økonomi for ${u.username}`} value={economy.has(u.id) ? 'own' : ''}
+                      title="Their own Økonomi on the front page - their own bank data"
+                      onChange={(e) => void run(() => api.setEconomyAccess(u.id, e.target.value === 'own'),
+                        e.target.value ? `${u.username} now has their own Økonomi.` : `${u.username} no longer has Økonomi.`)}>
                 <option value="">Økonomi: no</option>
-                {owners.map((o) => <option key={o.id} value={o.id}>Økonomi: reads {o.username}'s</option>)}
+                <option value="own">Økonomi: own data</option>
               </select>
             )}
             {resetFor === u.id ? (

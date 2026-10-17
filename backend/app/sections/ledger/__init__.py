@@ -80,12 +80,24 @@ def _m002_viewers(con: sqlite3.Connection) -> None:
     """)
 
 
+def _m003_access(con: sqlite3.Connection) -> None:
+    """0.3.3: Økonomi per person - a family account with access has its own
+    ledger. Who had read access (0.3.0) now has Økonomi of their own."""
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS ledger_access (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE
+        );
+        INSERT OR IGNORE INTO ledger_access (user_id) SELECT user_id FROM ledger_viewers;
+    """)
+
+
 SECTION = Section(
     id="ledger",
     title="Økonomi",
     router=router,
     migrations=[(1, "ledger tables (SLQ _m048)", _m001_ledger),
-                (2, "family read access", _m002_viewers)],
+                (2, "family read access", _m002_viewers),
+                (3, "Økonomi per person: family access", _m003_access)],
     family_prefixes=("/api/okonomi/",),
     reset=ledger_ask.reset,
 )

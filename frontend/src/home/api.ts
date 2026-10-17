@@ -67,6 +67,14 @@ export type OkState = { access: false } | {
   access: true; own: boolean; owner: string; count: number; firstDate: string | null; lastDate: string | null;
   uncategorised: number; months: string[]; model: boolean; ask: OkAsk | null;
 };
+export interface OkData {
+  imports: { id: number; account: string; filename: string; importedAt: string; added: number; firstDate: string | null; lastDate: string | null }[];
+  accounts: { account: string; n: number; first: string; last: string }[];
+  count: number; left: number; model: boolean;
+  uncategorised: { key: string; name: string; sample: string; count: number; total: number }[];
+  categorise: { state: string; left: number; placed?: number; error?: string | null; ahead?: number | null };
+  categories: { key: string; name: string }[];
+}
 export interface OkMonth {
   month: string; count: number; spent: number; income: number; otherIn: number; transfersOut: number;
   baselinePerMonth: number | null; baselineMonths: number | null;
@@ -160,6 +168,17 @@ export const homeApi = {
     if (filter.merchant) q.set('merchant', filter.merchant);
     return fetch(`/api/okonomi/transactions?${q}`).then(json<{ total: number; sum: number; rows: OkTx[] }>);
   },
+  okData: () => fetch('/api/okonomi/data').then(json<OkData>),
+  okImport: (file: File, account: string) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return fetch(`/api/okonomi/import?account=${encodeURIComponent(account)}`, { method: 'POST', body: fd })
+      .then(json<{ added: number; alreadyThere: number; rowsInFile: number; uncategorised: number; skipped: number }>);
+  },
+  okDeleteImport: (id: number) => fetch(`/api/okonomi/imports/${id}`, { method: 'DELETE' }).then(json<{ removed: number }>),
+  okSetCategory: (key: string, category: string) =>
+    fetch('/api/okonomi/merchant', send('PUT', { key, category })).then(json<{ ok: boolean }>),
+  okCategorise: () => fetch('/api/okonomi/categorise', { method: 'POST' }).then(json<OkData>),
   okAsk: (question: string) => fetch('/api/okonomi/ask', send('POST', { question })).then(json<{ ask: OkAsk | null }>),
   okAskState: () => fetch('/api/okonomi/ask').then(json<{ ask: OkAsk | null }>),
   okAskStop: () => fetch('/api/okonomi/ask/stop', { method: 'POST' }).then(json<{ ask: OkAsk | null }>),

@@ -73,14 +73,14 @@ describe('shortcuts', () => {
     expect(screen.queryByText('Cyklus')).toBeNull();
   });
 
-  it('Økonomi opens the phone page; a family account given access sees whose', async () => {
+  it('Økonomi opens the phone page for a family account with its own Økonomi', async () => {
     vi.spyOn(homeApi, 'mine').mockResolvedValue({ days: [] });
     vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: false, owner: 'far', count: 3, firstDate: null,
       lastDate: null, uncategorised: 0, months: [], model: true, ask: null });
     vi.spyOn(homeApi, 'cyState').mockResolvedValue(NO_CY);
     render(<Shortcuts me={{ id: 3, username: 'mor', role: 'family' }} atlas="Alf’s Atlas" />);
     expect((await screen.findByText('Økonomi')).closest('a')).toHaveAttribute('href', '#/okonomi');
-    expect(screen.getByText('fars forbrug')).toBeInTheDocument();
+    expect(screen.getByText('Konti og forbrug')).toBeInTheDocument();
   });
 
   it('Cyklus shows her cycle day, or what is shared with you', async () => {
@@ -184,17 +184,16 @@ const MONTH: OkMonth = {
 describe('Økonomi on the phone', () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
-  it('shows the month against a usual one, read only for a viewer', async () => {
-    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: false, owner: 'far', count: 40,
+  it('shows the month against a usual one', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: true, owner: 'mor', count: 40,
       firstDate: '2026-08-01', lastDate: '2026-09-30', uncategorised: 2, months: ['2026-08', '2026-09'], model: true, ask: null });
     const month = vi.spyOn(homeApi, 'okMonth').mockResolvedValue(MONTH);
     vi.spyOn(homeApi, 'okTx').mockResolvedValue({ total: 1, sum: -120, rows: [{ date: '2026-09-03', merchant: 'Netto',
       text: 'NETTO', amount: -120, category: 'groceries', categoryName: 'Dagligvarer', merchantKey: 'netto' }] });
-    render(<OkonomiPage month={null} />);
-    expect(await screen.findByText('Du ser fars økonomi · kun læsning')).toBeInTheDocument();
-    expect(month).toHaveBeenCalledWith('2026-09');                     // the newest month first
+    render(<OkonomiPage month={null} me={{ role: 'family' }} />);
+    await waitFor(() => expect(month).toHaveBeenCalledWith('2026-09'));  // the newest month first
     expect(await screen.findByText('20 % over en normal måned')).toBeInTheDocument();
-    expect(screen.queryByText(/admin-appen/)).toBeNull();                // not the owner
+    expect(screen.queryByText(/admin-appen/)).toBeNull();                // a family account has no admin app
     fireEvent.click(screen.getByText('Dagligvarer'));
     expect(await screen.findByLabelText('Posteringer: Dagligvarer')).toBeInTheDocument();
   });
@@ -202,7 +201,27 @@ describe('Økonomi on the phone', () => {
   it('says so when there is no access', async () => {
     vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: false });
     render(<OkonomiPage month={null} />);
-    expect(await screen.findByText('Du har ikke adgang til Økonomi.')).toBeInTheDocument();
+    expect(await screen.findByText('Du har ikke Økonomi.')).toBeInTheDocument();
+  });
+
+  it('an empty Økonomi starts with reading in a bank export, then places the shops', async () => {
+    vi.spyOn(homeApi, 'okState').mockResolvedValue({ access: true, own: true, owner: 'mor', count: 0,
+      firstDate: null, lastDate: null, uncategorised: 0, months: [], model: false, ask: null });
+    const data = { imports: [], accounts: [], count: 0, left: 1, model: false,
+      uncategorised: [{ key: 'zxq', name: 'Zxq Butik', sample: 'ZXQ', count: 2, total: -300 }],
+      categorise: { state: 'none', left: 1 }, categories: [{ key: 'groceries', name: 'Dagligvarer' }] };
+    vi.spyOn(homeApi, 'okData').mockResolvedValue(data);
+    const imp = vi.spyOn(homeApi, 'okImport').mockResolvedValue({ added: 12, alreadyThere: 0, rowsInFile: 12, uncategorised: 1, skipped: 0 });
+    const place = vi.spyOn(homeApi, 'okSetCategory').mockResolvedValue({ ok: true });
+    render(<OkonomiPage month={null} me={{ role: 'family' }} />);
+    expect(await screen.findByText('Kom i gang')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Konto'), { target: { value: 'Lønkonto' } });
+    const file = new File(['x'], 'eksport.csv', { type: 'text/csv' });
+    fireEvent.change(document.querySelector('.ok-pick input[type=file]')!, { target: { files: [file] } });
+    await waitFor(() => expect(imp).toHaveBeenCalledWith(file, 'Lønkonto'));
+    expect(await screen.findByText('12 nye posteringer.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Kategori for Zxq Butik'), { target: { value: 'groceries' } });
+    await waitFor(() => expect(place).toHaveBeenCalledWith('zxq', 'groceries'));
   });
 });
 

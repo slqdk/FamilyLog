@@ -335,13 +335,14 @@ with sync_playwright() as p:
     row.wait_for(timeout=15000)
     row.locator("select[aria-label='Gender of mor']").select_option("female")
     page.wait_for_selector("text=mor updated.")
-    row.locator("select[aria-label='Økonomi for mor']").select_option(label="Økonomi: reads admin's")
-    page.wait_for_selector("text=mor can now read that Økonomi.")
+    row.locator("select[aria-label='Økonomi for mor']").select_option(label="Økonomi: own data")
+    page.wait_for_selector("text=mor now has their own Økonomi.")
     check("Accounts sets gender and Økonomi access",
           row.locator("select[aria-label='Gender of mor']").input_value() == "female")
     page.screenshot(path=f"{OUT}/13-accounts.png", full_page=True)
 
-    # ---- mor: Økonomi read-only, and her Cyklus ----------------------------------------------
+    # ---- mor: her own Økonomi (0.3.3), and her Cyklus ------------------------------------------
+    admin_count = ph.request.get(BASE + "/api/okonomi/state").json()["count"]
     fp.goto(BASE + "/")
     fp.wait_for_selector(".hm-tile")
     wait_until(fp, lambda: fp.locator(".hm-tile-name", has_text="Cyklus").count() == 1)
@@ -349,13 +350,19 @@ with sync_playwright() as p:
     check("mor's tiles now include Økonomi and Cyklus", tiles == ["Alf’s Atlas", "Dagbog", "Økonomi", "Cyklus"], str(tiles))
     fp.screenshot(path=f"{OUT}/14-home-four-tiles.png")
     fp.locator(".hm-tile", has_text="Økonomi").click()
-    fp.wait_for_selector(".ok-hero", timeout=15000)
-    check("mor reads admin's Økonomi, read only", "admins økonomi" in fp.locator(".ok-whose").inner_text()
-          and fp.locator(".ok-foot").count() == 0)
+    fp.wait_for_selector("text=Kom i gang", timeout=15000)
+    check("mor starts with her own, empty Økonomi", "Davidsens" not in fp.content() and fp.locator(".ok-foot").count() == 0)
+    fp.locator(".ok-import input[aria-label=Konto]").fill("Mors konto")
+    fp.locator(".ok-pick input[type=file]").set_input_files(
+        files=[{"name": "mor.csv", "mimeType": "text/csv", "buffer": synthetic_export()}])
+    fp.wait_for_selector(".ok-hero", timeout=30000)
+    check("mor reads in her own bank export on the phone", "kr" in fp.locator(".ok-hero-num").inner_text())
+    check("the admin's Økonomi is untouched by hers",
+          ph.request.get(BASE + "/api/okonomi/state").json()["count"] == admin_count)
     fp.locator(".ok-ask-row input").fill("Hvor meget hos Davidsens?")
     fp.get_by_role("button", name="Spørg").click()
     wait_until(fp, lambda: fp.locator(".ok-answer .md").count() > 0 and fp.locator(".ok-answer .ok-note").count() > 0)
-    check("mor asks Alf about the shared Økonomi", "From the ledger:" in fp.locator(".ok-answer").inner_text(),
+    check("mor asks Alf about her own Økonomi", "From the ledger:" in fp.locator(".ok-answer").inner_text(),
           fp.locator(".ok-answer").inner_text()[:160])
     check("mor still cannot reach the owner's API", fp.request.get(BASE + "/api/ledger/summary").status == 403
           and fp.request.delete(BASE + "/api/ledger").status == 403)

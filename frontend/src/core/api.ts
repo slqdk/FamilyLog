@@ -46,9 +46,9 @@ export const api = {
   signOut: (id: number) => fetch(`/api/users/${id}/sign-out`, { method: 'POST' }).then(json<{ ok: boolean }>),
   setGender: (id: number, gender: string) =>
     fetch(`/api/users/${id}`, send('PATCH', { gender })).then(json<UserDto>),
-  /** 0.3.0: which family account reads which Økonomi (the ledger section's). */
-  economyViewers: () => fetch('/api/ledger/viewers').then(json<{ userId: number; ownerId: number }[]>),
-  setEconomyViewer: (userId: number, ownerId: number | null) =>
-    fetch('/api/ledger/viewers', send('PUT', { userId, ownerId })).then(json<{ userId: number; ownerId: number }[]>),
+  /** 0.3.3: family accounts with their own Økonomi (the ledger section's). */
+  economyAccess: () => fetch('/api/ledger/access').then(json<number[]>),
+  setEconomyAccess: (userId: number, on: boolean) =>
+    fetch('/api/ledger/access', send('PUT', { userId, on })).then(json<number[]>),
   deleteUser: (id: number) => fetch(`/api/users/${id}`, { method: 'DELETE' }).then(json<{ ok: boolean }>),
 };
