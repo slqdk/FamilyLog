@@ -11,11 +11,11 @@ The first release: a standalone household app, split out of SLQ Companion
 
 1. Create the GitHub repo (`familylog`), push this tree, and add a read-only
    deploy key for the server (docs/CONTAINER.md §1).
-2. On `30.11.0.66`: clone to `/opt/familylog`, copy
+2. On the LXC `30.11.0.108` (Docker installed): clone to `/opt/familylog`, copy
    `deploy/container/docker-compose.override.example.yml` to
    `docker-compose.override.yml` and edit it, then
    `bash update.sh compose up -d --build`.
-3. In NPM: proxy host `familylog.slq.dk` → `30.11.0.66:8081` with SSL and
+3. In NPM: proxy host `familylog.slq.dk` → `30.11.0.108:8081` with SSL and
    `client_max_body_size 100m;` (docs/CONTAINER.md §2).
 4. Open the site, create the administrator, then Settings → Ollama:
    **Test**, pick the chat and vision models, **Save**.

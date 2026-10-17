@@ -1,12 +1,17 @@
 # FamilyLog in a container
 
-FamilyLog runs as its own container on the Proxmox server, next to SLQ on
-the same Debian VM (`30.11.0.66`): SLQ on host port 8080, FamilyLog on
-**8081**. Ollama and ComfyUI stay on the GPU VM (`30.11.0.104`) and are
-reached over HTTP. Nginx Proxy Manager serves it as **familylog.slq.dk**.
+FamilyLog runs in Docker in its own Proxmox LXC, **`30.11.0.108`** (Debian 12,
+unprivileged, `nesting=1,keyctl=1`, 2 cores, 2 GB RAM + 512 MB swap, 24 GB
+disk), on host port **8081**. SLQ stays on `30.11.0.66`. Ollama and ComfyUI
+stay on the GPU VM (`30.11.0.104`) and are reached over HTTP. Nginx Proxy Manager serves it as **familylog.slq.dk**.
 The update flow (`update.sh`) is SLQ's, ported unchanged.
 
 ## 1. Clone, your settings, first start
+
+In the LXC, once:
+
+    apt update && apt install -y curl git python3
+    curl -fsSL https://get.docker.com | sh
 
 The repo is private, so the host signs in to GitHub with a read-only
 **deploy key**:
@@ -14,7 +19,7 @@ The repo is private, so the host signs in to GitHub with a read-only
     ssh-keygen -t ed25519 -f ~/.ssh/familylog_deploy
     # add ~/.ssh/familylog_deploy.pub under the repo's Settings → Deploy keys (no write access)
     GIT_SSH_COMMAND="ssh -i ~/.ssh/familylog_deploy" \
-      git clone git@github.com:<owner>/familylog.git /opt/familylog
+      git clone git@github.com:slqdk/FamilyLog.git /opt/familylog
     git -C /opt/familylog config core.sshCommand "ssh -i ~/.ssh/familylog_deploy"
 
 **Do not edit files in the clone** - updates are fast-forwards and refuse a
@@ -55,7 +60,7 @@ page and kept in `/data/settings.json`.
 
 ## 2. Nginx Proxy Manager
 
-New proxy host **familylog.slq.dk** → `http://30.11.0.66:8081`, with a Let's
+New proxy host **familylog.slq.dk** → `http://30.11.0.108:8081`, with a Let's
 Encrypt certificate and **Force SSL**. Websockets are not used. Under
 Advanced, raise the upload limit for bank exports and photos and give Spørg
 Alf and the OSM import time:

@@ -12,7 +12,8 @@ SQLite) split out of SLQ Companion 2.67.2. Two sections, Økonomi and
 FamilyMap, ported with their logic and tests unchanged; more sections come
 later and plug in the same way. Name: **FamilyLog** (`backend/app/meta.py`,
 the one place), technical id `familylog`, host `familylog.slq.dk`, host port
-8081 on the Debian VM `30.11.0.66` next to SLQ.
+8081 in its own Proxmox LXC `30.11.0.108` (Docker; SLQ stays on `30.11.0.66`).
+Repo: github.com/slqdk/FamilyLog (private).
 
 **Layout**
 
@@ -80,8 +81,7 @@ both its roles) and FamilyMap's `chatModel` / `visionModel` (empty = role).
 
 **Decisions taken (Søren, 2026-10-17)**: no migration tool - nothing is
 carried over from SLQ, he moves data and accounts by hand; name FamilyLog;
-host familylog.slq.dk. Defaults chosen without asking: port 8081; same VM
-as SLQ; SLQ's account limit (3, family not counted) kept.
+host familylog.slq.dk. Own LXC `30.11.0.108` (Søren). Defaults chosen without asking: port 8081; SLQ's account limit (3, family not counted) kept.
 
 **Verify before every release** (all were green for 0.1.0):
 
@@ -97,6 +97,6 @@ Overpass or web search was reached - all model and map calls in tests are
 the mock or replaced functions. NPM and the `/fm/` redirect are documented,
 not tried.
 
-**Next**: first deploy on 30.11.0.66 and check `update.sh` end to end
+**Next**: first deploy on 30.11.0.108 and check `update.sh` end to end
 (a second `update.sh --force` exercises backup + restart); then the
 `/fm/` move; then the next section when Søren specifies it.
