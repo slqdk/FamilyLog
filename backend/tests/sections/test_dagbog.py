@@ -177,3 +177,18 @@ def test_migration_3_doubles_old_overskud_and_adds_childcare(fresh_db):
     with db.connect() as con:
         assert json.loads(con.execute("SELECT value FROM dagbog_settings WHERE key='tags'")
                           .fetchone()[0]).count("Børnepasning") == 1
+
+
+def test_the_family_week_is_the_family_only(client):
+    """0.3.7 (Søren): only the family in "Familien" - the family accounts and
+    the administrator, who is family; a user account is not, and its own
+    Dagbog stays its own."""
+    mor = _login(client, "mor", "familie-kode-1")
+    sanne = _login(client, "sanne", "pw-sanne-12345", role="user")
+    client.put("/api/dagbog/entry", json={"day": TODAY, "mood": 5})
+    sanne.put("/api/dagbog/entry", json={"day": TODAY, "mood": 1})
+    fam = mor.get(f"/api/dagbog/family?frm={TODAY}&to={TODAY}").json()
+    assert [m["username"] for m in fam["members"]] == ["admin", "mor"]
+    assert [e["mood"] for e in fam["entries"]] == [5]                 # the admin's day, not sanne's
+    assert sanne.get(f"/api/dagbog/family?frm={TODAY}&to={TODAY}").status_code == 403
+    assert sanne.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"]["mood"] == 1

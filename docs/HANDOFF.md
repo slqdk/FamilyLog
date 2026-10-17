@@ -5,6 +5,17 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.7 - Start here
+
+Dagbog: `SliderField` in `src/home/Dagbog.tsx` renders scales with max > 5
+(Mentalt overskud) as `<input type=range>`; null until touched (pointer-up
+or key-up sets the shown value). `dagbog.family()` lists and returns only
+`FAMILY_ROLES` = admin + family; `GET /api/dagbog/family` is 403 for a user
+account (`is_family`), and the front page hides its Familien tab and menu
+item.
+
+---
+
 ## 0.3.6 - Start here
 
 `parseAnswer` (familymap/phone/logic.ts) also takes `[id]` - only when the

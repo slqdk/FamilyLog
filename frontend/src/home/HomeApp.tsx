@@ -5,7 +5,7 @@ import type { FmUser } from '../sections/familymap/phone/types';
 import { homeApi, type CyState, type OkState } from './api';
 import { Chat } from './Chat';
 import { CyklusCalendar, CyklusDayPage, CyklusPage, CyklusShare, cyklusTileLine } from './Cyklus';
-import { DagbogPage, FamilyWeek } from './Dagbog';
+import { DagbogPage, FamilyWeek, isFamily } from './Dagbog';
 import { OkonomiPage } from './Okonomi';
 import { parseRoute, routeHash, todayLocal, type HomeRoute } from './logic';
 
@@ -45,7 +45,7 @@ export function HomeApp() {
   if (me === false) return <Login name={name} onIn={setMe} />;
   const signOut = async () => { await homeApi.logout().catch(() => {}); setMe(false); };
 
-  if (route.name === 'dagbog') return <DagbogPage day={route.day ?? todayLocal()} />;
+  if (route.name === 'dagbog') return <DagbogPage day={route.day ?? todayLocal()} role={me.role} />;
   if (route.name === 'family') return <FamilyWeek me={me} week={route.week} />;
   if (route.name === 'okonomi') return <OkonomiPage month={route.month} me={me} />;
   if (route.name === 'cyklus') return <CyklusPage />;
@@ -170,7 +170,7 @@ function Menu({ me, onClose, onSignOut, onNewChat }: {
         </div>
         <button className="fm-drawer-item" onClick={() => { onClose(); onNewChat(); }}>Ny samtale med Alf</button>
         <a className="fm-drawer-item" href={routeHash({ name: 'dagbog', day: null })} onClick={onClose}>Min dagbog</a>
-        <a className="fm-drawer-item" href={routeHash({ name: 'family', week: null })} onClick={onClose}>Familiens uge</a>
+        {isFamily(me.role) && <a className="fm-drawer-item" href={routeHash({ name: 'family', week: null })} onClick={onClose}>Familiens uge</a>}
         <a className="fm-drawer-item" href="/fm/">Alf’s Atlas</a>
         {me.gender === 'female' && <a className="fm-drawer-item" href={routeHash({ name: 'cyklus' })} onClick={onClose}>Cyklus</a>}
         {me.role !== 'family' && <a className="fm-drawer-item" href="/app/">Admin-appen</a>}

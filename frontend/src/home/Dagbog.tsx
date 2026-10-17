@@ -33,7 +33,12 @@ export function Bar({ title, back = '#/' }: { title: string; back?: string }) {
   );
 }
 
-function Tabs({ on }: { on: 'mine' | 'family' }) {
+/** "Familien" is for the family - family accounts and the administrator
+    (0.3.7); a user account sees only its own days. */
+export function isFamily(role: string | undefined) { return role === 'admin' || role === 'family'; }
+
+function Tabs({ on, role }: { on: 'mine' | 'family'; role?: string }) {
+  if (on === 'mine' && role && !isFamily(role)) return null;
   return (
     <nav className="hm-tabs" aria-label="Dagbog">
       <a className={on === 'mine' ? 'on' : ''} href={routeHash({ name: 'dagbog', day: null })}>Min dag</a>
@@ -42,7 +47,7 @@ function Tabs({ on }: { on: 'mine' | 'family' }) {
   );
 }
 
-export function DagbogPage({ day }: { day: string }) {
+export function DagbogPage({ day, role }: { day: string; role?: string }) {
   const today = todayLocal();
   const [cfg, setCfg] = useState<DagbogConfig | null>(null);
   const [saved, setSaved] = useState<DagbogEntry | null | undefined>(undefined);
@@ -88,7 +93,7 @@ export function DagbogPage({ day }: { day: string }) {
   return (
     <div className="fm-page hm-page">
       <Bar title="Dagbog" />
-      <Tabs on="mine" />
+      <Tabs on="mine" role={role} />
       <div className="hm-daynav">
         <a className="hm-step" aria-label="Dagen før" href={routeHash({ name: 'dagbog', day: prev })}>‹</a>
         <span className="hm-dayname">{dayTitle(day, today)}</span>
@@ -125,6 +130,38 @@ export function DagbogPage({ day }: { day: string }) {
   );
 }
 
+/** A 1-10 scale as a slider (0.3.7, Søren). Untouched it says so and sits
+    faded in the middle; the first touch - a tap or a drag - sets it. */
+function SliderField({ f, value, top, onChange }: {
+  f: DagbogField; value: number | null; top: number; onChange: (v: number | null) => void;
+}) {
+  const shown = value ?? Math.ceil(top / 2);
+  const pct = ((shown - 1) / (top - 1)) * 100;
+  return (
+    <section className="fm-sheet hm-field" aria-label={f.label}>
+      <div className="hm-slider-head">
+        <h3 className="hm-field-label">{f.label}</h3>
+        <span className={`hm-slider-value${value == null ? ' hm-unset' : ''}`} aria-hidden>
+          {value == null ? 'Træk for at vælge' : `${value}/${top}`}
+        </span>
+      </div>
+      <div className={`hm-slider${value == null ? ' hm-unset' : ''}`} style={{ '--pct': `${pct}%` } as React.CSSProperties}>
+        <input type="range" min={1} max={top} step={1} value={shown} aria-label={f.label}
+               aria-valuetext={value == null ? 'Ikke valgt' : `${value} af ${top}`}
+               onChange={(e) => onChange(Number(e.target.value))}
+               onPointerUp={(e) => { if (value == null) onChange(Number((e.target as HTMLInputElement).value)); }}
+               onKeyUp={(e) => { if (value == null) onChange(Number((e.target as HTMLInputElement).value)); }} />
+        <div className="hm-slider-ticks" aria-hidden>
+          {Array.from({ length: top }, (_, i) => <span key={i} className={value === i + 1 ? 'on' : ''}>{i + 1}</span>)}
+        </div>
+      </div>
+      <div className="hm-scale-ends"><span>{f.low}</span>
+        {value != null && <button className="fm-link hm-slider-clear" onClick={() => onChange(null)}>Nulstil</button>}
+        <span>{f.high}</span></div>
+    </section>
+  );
+}
+
 function FieldBox({ f, draft, set, lists, day, hasPhoto, photoV, busy, onPhoto, onRemovePhoto }: {
   f: DagbogField; draft: Draft; set: <K extends keyof Draft>(k: K, v: Draft[K]) => void;
   lists: { tags: string[]; foods: string[] }; day: string; hasPhoto: boolean; photoV: string; busy: boolean;
@@ -134,6 +171,7 @@ function FieldBox({ f, draft, set, lists, day, hasPhoto, photoV, busy, onPhoto, 
   if (f.kind === 'scale') {
     const value = draft[key] as number | null;
     const top = f.max ?? 5;                       // mood 1-5, mentalt overskud 1-10 (0.2.2)
+    if (top > 5) return <SliderField f={f} value={value} top={top} onChange={(v) => set(key, v as never)} />;
     return (
       <section className="fm-sheet hm-field" aria-label={f.label}>
         <h3 className="hm-field-label">{f.label}</h3>

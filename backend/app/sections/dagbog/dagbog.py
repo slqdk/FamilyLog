@@ -247,9 +247,19 @@ def delete_entry(user_id: int, day: str) -> None:
         con.execute("DELETE FROM dagbog_entries WHERE user_id = ? AND day = ?", (user_id, day))
 
 
+FAMILY_ROLES = ("admin", "family")
+
+
+def is_family(user: dict) -> bool:
+    """0.3.7 (Søren): the family is the family accounts and the administrator
+    ("admin er automatisk familie"); a user account is not."""
+    return user.get("role") in FAMILY_ROLES
+
+
 def family(frm: str, to: str) -> dict:
-    """Everyone's ratings and tags for a period - never a highlight or a
-    photo, not even the asker's own (the overview has no place for them)."""
+    """The family's ratings and tags for a period - the administrator and the
+    family accounts only (0.3.7) - never a highlight or a photo, not even
+    the asker's own (the overview has no place for them)."""
     try:
         a, b = date.fromisoformat(frm), date.fromisoformat(to)
     except ValueError:
@@ -257,10 +267,12 @@ def family(frm: str, to: str) -> dict:
     if b < a or (b - a).days >= MAX_RANGE:
         raise Invalid(f"Perioden skal være 1-{MAX_RANGE} dage.")
     with db.connect() as con:
-        members = con.execute("SELECT id, username, role FROM users ORDER BY id").fetchall()
+        members = con.execute("SELECT id, username, role FROM users WHERE role IN (?, ?) ORDER BY id",
+                              FAMILY_ROLES).fetchall()
         rows = con.execute(
-            "SELECT * FROM dagbog_entries WHERE day BETWEEN ? AND ? ORDER BY day, user_id",
-            (a.isoformat(), b.isoformat())).fetchall()
+            "SELECT e.* FROM dagbog_entries e JOIN users u ON u.id = e.user_id"
+            " WHERE e.day BETWEEN ? AND ? AND u.role IN (?, ?) ORDER BY e.day, e.user_id",
+            (a.isoformat(), b.isoformat(), *FAMILY_ROLES)).fetchall()
     return {"from": a.isoformat(), "to": b.isoformat(),
             "members": [{"id": m["id"], "username": m["username"],
                          "fields": fields_for(m["id"])} for m in members],

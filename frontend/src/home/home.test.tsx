@@ -167,8 +167,10 @@ describe('Dagbog', () => {
                tags: [], updatedAt: 'x', highlight: '', hasPhoto: false, ...b } as never }));
     render(<DagbogPage day="2026-10-17" />);
     fireEvent.click(await screen.findByLabelText('Humør 4'));
-    expect(screen.getAllByRole('radio', { name: /^Mentalt overskud \d+$/ })).toHaveLength(10);
-    fireEvent.click(screen.getByLabelText('Mentalt overskud 8'));
+    const slider = screen.getByRole('slider', { name: 'Mentalt overskud' });     // a slider since 0.3.7
+    expect(slider).toHaveAttribute('aria-valuetext', 'Ikke valgt');
+    fireEvent.change(slider, { target: { value: '8' } });
+    expect(slider).toHaveAttribute('aria-valuetext', '8 af 10');
     fireEvent.click(screen.getByText('Hjemmelavet'));
     fireEvent.click(screen.getByText('Kage'));
     expect(screen.queryByText('Søvn')).toBeNull();

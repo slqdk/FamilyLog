@@ -2,6 +2,17 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.7 - 2026-10-17
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Mentalt overskud is a slider** (1-10). Untouched it says "Træk for at
+  vælge"; a tap or a drag sets it, **Nulstil** clears it.
+- **Familien shows only the family**: the family accounts and the
+  administrator (who is family - the family sees the administrator's days).
+  A *user* account is not family: it keeps its own Dagbog but has no
+  Familien tab, and its days are not in the family's week.
+
 ## 0.3.6 - 2026-10-17
 
 **ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.

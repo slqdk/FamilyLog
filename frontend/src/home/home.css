@@ -92,6 +92,29 @@
 .hm-faces button.on { background: var(--fm-cream-2); border-color: var(--fm-olive); border-width: 3px; }
 .hm-scale.hm-scale-long { row-gap: 8px; }                  /* 1-10: two rows of five */
 .hm-scale.hm-scale-long button { height: 44px; }
+/* The 1-10 slider (0.3.7) */
+.hm-slider-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.hm-slider-value { font-size: 22px; font-weight: 800; color: var(--fm-olive-deep); }
+.hm-slider-value.hm-unset { font-size: 14px; font-weight: 600; color: var(--fm-dim); }
+.hm-slider { position: relative; padding: 6px 0 0; }
+.hm-slider input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 34px; margin: 0;
+  background: none; touch-action: pan-y; }
+.hm-slider input[type=range]::-webkit-slider-runnable-track { height: 12px; border-radius: 6px;
+  background: linear-gradient(to right, var(--fm-olive) var(--pct), var(--fm-cream-2) var(--pct)); }
+.hm-slider input[type=range]::-moz-range-track { height: 12px; border-radius: 6px; background: var(--fm-cream-2); }
+.hm-slider input[type=range]::-moz-range-progress { height: 12px; border-radius: 6px; background: var(--fm-olive); }
+.hm-slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 32px; height: 32px; margin-top: -10px;
+  border-radius: 50%; background: var(--fm-olive-deep); border: 4px solid #fffdf7; box-shadow: var(--fm-shadow); }
+.hm-slider input[type=range]::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: var(--fm-olive-deep);
+  border: 4px solid #fffdf7; box-shadow: var(--fm-shadow); }
+.hm-slider.hm-unset input[type=range]::-webkit-slider-runnable-track { background: var(--fm-cream-2); }
+.hm-slider.hm-unset input[type=range]::-moz-range-progress { background: transparent; }
+.hm-slider.hm-unset input[type=range]::-webkit-slider-thumb { background: #c9c2ad; }
+.hm-slider.hm-unset input[type=range]::-moz-range-thumb { background: #c9c2ad; }
+.hm-slider-ticks { display: flex; justify-content: space-between; padding: 0 9px; font-size: 13px; color: var(--fm-dim); }
+.hm-slider-ticks span { width: 14px; text-align: center; }
+.hm-slider-ticks span.on { color: var(--fm-olive-deep); font-weight: 800; }
+.hm-slider-clear { font-size: 13px; padding: 0; }
 .hm-scale-ends { display: flex; justify-content: space-between; font-size: 13px; color: var(--fm-dim); margin-top: 6px; }
 .hm-count { display: flex; align-items: center; gap: 12px; }
 .hm-count > button:not(.fm-clear) { width: 52px; height: 48px; border-radius: 14px; border: 1.5px solid var(--fm-line);

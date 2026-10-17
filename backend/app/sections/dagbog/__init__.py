@@ -1,5 +1,6 @@
-"""Dagbog: each person rates their day; the family sees the ratings, the
-highlight text and photo stay with the author (FamilyLog 0.2.0)."""
+"""Dagbog: each person rates their day; the family (family accounts and the
+administrator, 0.3.7) sees the ratings, the highlight text and photo stay
+with the author (FamilyLog 0.2.0)."""
 from __future__ import annotations
 
 import sqlite3

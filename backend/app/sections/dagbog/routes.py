@@ -50,6 +50,10 @@ def dagbog_delete(day: str, request: Request):
 
 @router.get("/api/dagbog/family")
 def dagbog_family(frm: str, to: str, request: Request):
+    """The family's week - for the family (family accounts and the
+    administrator); a user account keeps its own Dagbog only (0.3.7)."""
+    if not dagbog.is_family(request.state.user):
+        raise HTTPException(403, "Familiens uge er kun for familien.")
     return _call(dagbog.family, frm, to)
 
 

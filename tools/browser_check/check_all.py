@@ -251,9 +251,11 @@ with sync_playwright() as p:
     fp.get_by_label("Humør 4").click()
     check("no Søvn or Energi in the Dagbog (0.2.1)", fp.get_by_label("Søvn 3").count() == 0
           and fp.get_by_label("Energi 3").count() == 0)
-    check("Mentalt overskud runs 1-10 (0.2.2)",
-          fp.locator(".hm-field[aria-label='Mentalt overskud'] .hm-scale button").count() == 10)
-    fp.get_by_label("Mentalt overskud 7").click()
+    slider = fp.locator(".hm-field[aria-label='Mentalt overskud'] input[type=range]")
+    check("Mentalt overskud is a 1-10 slider (0.3.7)", slider.get_attribute("max") == "10"
+          and slider.get_attribute("aria-valuetext") == "Ikke valgt")
+    slider.fill("7")
+    check("the slider sets 7", "7/10" in fp.locator(".hm-slider-value").inner_text())
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Hjemmelavet").click()
     fp.locator(".hm-field[aria-label='Mad'] .hm-tags button", has_text="Kage").click()
     fp.get_by_label("Flere").click()
