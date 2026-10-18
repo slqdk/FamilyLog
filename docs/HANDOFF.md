@@ -5,6 +5,24 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.9 - Start here
+
+Dagbog → Familien is per person (`src/home/DagbogFamily.tsx`, `FamilyPage`):
+route `#/dagbog/familien[/<userId>[/statistik]]` (an old `/familien/<date>`
+link lands on the family). Backend: `dagbog.person_days` (newest first,
+`before` + `limit`, `more`), `month_moods`, `stats` (per-week figures are the
+mean of the days the field was filled in × 7; "links" = mood with vs without,
+≥3 days each, |diff| ≥ 0.3); all go through `_may_see` - yourself, or family
+looking at family (`Forbidden` → 403). Endpoints `/api/dagbog/person`,
+`/person/month`, `/stats`. Privacy changed on Søren's word: a day's
+`highlight`/`hasPhoto` go to the family when `shared` (column from migration
+5, default 1; rows that had a text or photo were set to 0 since they were
+written under "kun du kan se"). `shared` is only in the author's own DTO;
+`GET /api/dagbog/photo?user=` serves a family member's shared photo.
+Migration 5 also adds "Vitaminer" to a saved food list.
+
+---
+
 ## 0.3.8 - Start here
 
 Dagbog fields now: mood, mental, exercise (kind `slider`, minutes, step 30,

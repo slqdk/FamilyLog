@@ -2,6 +2,33 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.9 - 2026-10-18
+
+Dagbog → Familien, person by person.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`. Then tell the
+family: **the day's text and photo are now seen by the family** (the family
+accounts and the administrator). Days already written with a text or a
+photo were written under "kun du kan se", so they **stay private** until
+their author opens the day, ticks *Familien kan se teksten og billedet* and
+saves. A user account's days are still its own.
+
+- **Familien** opens on a card per person: the last 7 days as smileys, the
+  week's mood and the newest text. Tap a person for their page.
+- **A person's days**: every day, newest first, as a card - mood, mentalt
+  overskud, motion, sodavand, alkohol, sickness, activities, food, the text
+  and the photo. **Hent ældre dage** goes back as far as there are days; the
+  month calendar (smileys coloured by mood) jumps straight to a day.
+- **Statistik per person** for 30 days, 3 months, 12 months or everything:
+  days written and the longest run, mood and overskud on average, motion,
+  alkohol and sodavand a week, sick days, mood per month and per weekday,
+  what they do and eat most - and **what goes with the mood** (activities,
+  food, motion of an hour or more, alcohol, sodavand, sickness: the mood on
+  days with against days without, when there are 3 or more of each).
+- **The text and photo are shared with the family**, day by day: a box under
+  the text says so and can be unticked to keep a day to yourself.
+- **Vitaminer** is on the food list (added to a list you saved too).
+
 ## 0.3.8 - 2026-10-17
 
 More in the Dagbog.

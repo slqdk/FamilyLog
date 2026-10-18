@@ -513,14 +513,21 @@ Settings → Maps.
 title: Dagbog
 where: Top bar (administrator)
 since: 0.2.0
-changed: 0.2.2
+changed: 0.3.9
 
 The Dagbog's settings. Everyone rates their own day on the front page
-(**Dagbog**): mood (5 smileys), mental readiness (1-10), what they ate (food categories),
-alcohol, activities and the day's highlight (a text and a photo). The family
-sees each other's ratings, food and activities as a week (**Familien**); the highlight
-text and photo are only ever shown to the person who wrote them - not to the
-administrator either, here or anywhere else.
+(**Dagbog**): mood (5 smileys), mental readiness (1-10), motion, what they ate
+(food categories), sodavand, alcohol, activities, sickness and the day's
+highlight (a text and a photo).
+
+**Familien** (the family accounts and you) shows a card per person with
+their last 7 days; tap one for all their days - back to the first, with a
+month calendar to jump - and their **Statistik** (averages, months,
+weekdays, what they do and eat most, and what goes with a better or worse
+mood). Since 0.3.9 the family also sees the text and photo of a day, unless
+its author unticks *Familien kan se teksten og billedet* for that day. Days
+written before 0.3.9 with a text or photo stay private until their author
+shares them. A *user* account is not family: its days are its own.
 
 ## dagbog.members
 title: Fields per person
@@ -547,7 +554,8 @@ that already have it.
 title: Food
 where: Dagbog → Settings
 since: 0.2.1
+changed: 0.3.9
 
 The food categories everyone ticks under **Mad** - homemade, fast food,
-takeaway, cake, chips, sweets, fruit and vegetables and so on - one per
+takeaway, cake, chips, sweets, fruit and vegetables, vitamins and so on - one per
 line, same rules as the activities. The family sees what each other ticked.

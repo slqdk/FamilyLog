@@ -63,7 +63,7 @@ DEFAULT_TAGS = ["Skole/arbejde", "Sport", "Computer", "Gaming", "Fjernsyn", "Mob
                 "Børnepasning", "Venner", "Familie", "Udenfor", "Læsning", "Hobby", "Fri", "Syg"]
 # Sodavand left the food list in 0.3.8 - it has its own slider now.
 DEFAULT_FOODS = ["Hjemmelavet", "Fastfood", "Takeaway", "Restaurant", "Kage", "Chips",
-                 "Slik", "Is", "Frugt og grønt", "Morgenmad", "Madpakke"]
+                 "Slik", "Is", "Frugt og grønt", "Morgenmad", "Madpakke", "Vitaminer"]
 LISTS = {"tags": DEFAULT_TAGS, "foods": DEFAULT_FOODS}
 MAX_TAGS = 40
 MAX_TAG = 30
@@ -190,10 +190,15 @@ def _entry_dto(r, own: bool) -> dict:
            "tags": json.loads(r["tags"] or "[]"),
            "sick": json.loads(r["sick"] or "[]"), "sickNote": r["sick_note"] or "",
            "updatedAt": r["updated_at"]}
-    if own:
-        # Only the author ever gets these keys (the privacy rule).
+    shared = bool(r["shared"]) if "shared" in r.keys() else False
+    if own or shared:
+        # 0.3.9 (Søren): the family sees the text and the photo too - of a
+        # day its author shares (every new day does; days written while it
+        # was private stay private until the author shares them).
         out["highlight"] = r["highlight"] or ""
         out["hasPhoto"] = bool(r["photo"])
+    if own:
+        out["shared"] = shared
     return out
 
 
@@ -230,6 +235,9 @@ def save_entry(user_id: int, body: dict) -> dict:
         raise Invalid(f"Sygdomsnoten er for lang (højst {MAX_SICK_NOTE} tegn).")
     chosen = _picked(body, allowed, "tags", tags(), "Ukendt aktivitet")
     eaten = _picked(body, allowed, "foods", foods(), "Ukendt madtype")
+    shared = body.get("shared", True)
+    if not isinstance(shared, bool):
+        raise Invalid("Deling skal være til eller fra.")
     highlight = ""
     if "highlight" in allowed:
         highlight = str(body.get("highlight") or "").strip()
@@ -239,14 +247,16 @@ def save_entry(user_id: int, body: dict) -> dict:
     with db.connect() as con:
         con.execute(
             "INSERT INTO dagbog_entries (user_id, day, mood, mental, alcohol, exercise, soda, foods,"
-            " tags, sick, sick_note, highlight, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            " tags, sick, sick_note, highlight, shared, created_at, updated_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             " ON CONFLICT(user_id, day) DO UPDATE SET mood=excluded.mood,"
             " mental=excluded.mental, alcohol=excluded.alcohol, exercise=excluded.exercise,"
             " soda=excluded.soda, foods=excluded.foods, tags=excluded.tags, sick=excluded.sick,"
-            " sick_note=excluded.sick_note, highlight=excluded.highlight, updated_at=excluded.updated_at",
+            " sick_note=excluded.sick_note, highlight=excluded.highlight, shared=excluded.shared,"
+            " updated_at=excluded.updated_at",
             (user_id, day, *(values[c] for c in _COLUMNS),
              json.dumps(eaten, ensure_ascii=False), json.dumps(chosen, ensure_ascii=False),
-             json.dumps(sick, ensure_ascii=False), sick_note, highlight, now, now))
+             json.dumps(sick, ensure_ascii=False), sick_note, highlight, int(shared), now, now))
     return get_entry(user_id, day)
 
 
@@ -304,6 +314,159 @@ def family(frm: str, to: str) -> dict:
             "entries": [_entry_dto(r, own=False) for r in rows]}
 
 
+class Forbidden(PermissionError):
+    pass
+
+
+def _may_see(viewer: dict, user_id: int) -> dict:
+    """One family member looking at another's days: both must be family.
+    Returns the person looked at."""
+    with db.connect() as con:
+        r = con.execute("SELECT id, username, role FROM users WHERE id = ?", (user_id,)).fetchone()
+    if r is None:
+        raise NotFound("Den person findes ikke.")
+    if viewer["id"] != user_id and not (is_family(viewer) and r["role"] in FAMILY_ROLES):
+        raise Forbidden("Kun familien kan se hinandens dagbog.")
+    return {"id": r["id"], "username": r["username"]}
+
+
+def person_days(viewer: dict, user_id: int, before: str | None = None, limit: int = 20) -> dict:
+    """One person's days, newest first, `limit` at a time going back (0.3.9:
+    the family's overview per person, as far back as there are days)."""
+    who = _may_see(viewer, user_id)
+    limit = max(1, min(int(limit), 60))
+    params: list = [user_id]
+    where = "user_id = ?"
+    if before:
+        where += " AND day < ?"
+        params.append(_day(before))
+    with db.connect() as con:
+        rows = con.execute(f"SELECT * FROM dagbog_entries WHERE {where} ORDER BY day DESC LIMIT ?",
+                           params + [limit + 1]).fetchall()
+        first = con.execute("SELECT MIN(day), COUNT(*) FROM dagbog_entries WHERE user_id = ?",
+                            (user_id,)).fetchone()
+    own = viewer["id"] == user_id
+    return {"person": who, "own": own, "fields": fields_for(user_id),
+            "entries": [_entry_dto(r, own=own) for r in rows[:limit]],
+            "more": len(rows) > limit, "firstDay": first[0], "total": first[1]}
+
+
+def month_moods(viewer: dict, user_id: int, month: str) -> dict:
+    """A month's mood per day, for the calendar on a person's page."""
+    _may_see(viewer, user_id)
+    try:
+        start = date.fromisoformat(f"{month}-01")
+    except ValueError:
+        raise Invalid("Ugyldig måned.")
+    end = (start.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
+    with db.connect() as con:
+        rows = con.execute("SELECT day, mood FROM dagbog_entries WHERE user_id = ? AND day BETWEEN ? AND ?",
+                           (user_id, start.isoformat(), end.isoformat())).fetchall()
+    return {"month": month, "days": {r["day"]: r["mood"] for r in rows}}
+
+
+def stats(viewer: dict, user_id: int, frm: str | None, to: str | None) -> dict:
+    """One person's statistics for a period (0.3.9): how much is filled in,
+    averages, months and weekdays, what they do and eat most, and which
+    activities, foods and habits go with a better or worse mood."""
+    from collections import Counter, defaultdict
+    from statistics import mean
+    who = _may_see(viewer, user_id)
+    params: list = [user_id]
+    where = "user_id = ?"
+    if frm:
+        where += " AND day >= ?"
+        params.append(_day(frm))
+    if to:
+        where += " AND day <= ?"
+        params.append(_day(to))
+    with db.connect() as con:
+        rows = con.execute(f"SELECT * FROM dagbog_entries WHERE {where} ORDER BY day", params).fetchall()
+    entries = [_entry_dto(r, own=True) for r in rows]
+    out: dict = {"person": who, "from": frm, "to": to, "days": len(entries), "fields": fields_for(user_id)}
+    if not entries:
+        return out
+    first = date.fromisoformat(frm) if frm else date.fromisoformat(entries[0]["day"])
+    last = date.fromisoformat(to) if to else date.today()
+    span = max(1, (min(last, date.today()) - first).days + 1)
+
+    def per_week(key):
+        # A week's motion, alcohol or sodavand from the days it was filled
+        # in - a day left empty is not a day of none.
+        v = [e[key] for e in entries if e.get(key) is not None]
+        return round(mean(v) * 7, 1) if v else 0
+
+    def avg(key):
+        v = [e[key] for e in entries if e.get(key) is not None]
+        return round(mean(v), 1) if v else None
+
+    out.update({
+        "span": span, "coverage": round(len(entries) / span * 100),
+        "mood": avg("mood"), "mental": avg("mental"),
+        "exerciseHoursPerWeek": round(per_week("exercise") / 60, 1),
+        "alcoholPerWeek": per_week("alcohol"),
+        "sodaPerWeek": per_week("soda"),
+        "sickDays": sum(1 for e in entries if e.get("sick")),
+    })
+    # Months: mood, overskud, motion hours, alcohol.
+    by_month: dict[str, list] = defaultdict(list)
+    for e in entries:
+        by_month[e["day"][:7]].append(e)
+    out["months"] = [{
+        "month": m,
+        "days": len(es),
+        "mood": round(mean([e["mood"] for e in es if e["mood"] is not None]), 1)
+        if any(e["mood"] is not None for e in es) else None,
+        "mental": round(mean([e["mental"] for e in es if e["mental"] is not None]), 1)
+        if any(e["mental"] is not None for e in es) else None,
+        "exerciseHours": round(sum(e.get("exercise") or 0 for e in es) / 60, 1),
+        "alcohol": sum(e["alcohol"] or 0 for e in es),
+    } for m, es in sorted(by_month.items())]
+    # Weekdays (Monday first): mood.
+    wd: dict[int, list] = defaultdict(list)
+    for e in entries:
+        if e["mood"] is not None:
+            wd[date.fromisoformat(e["day"]).weekday()].append(e["mood"])
+    out["weekdays"] = [round(mean(wd[i]), 1) if wd.get(i) else None for i in range(7)]
+    tags_c = Counter(t for e in entries for t in e["tags"])
+    foods_c = Counter(t for e in entries for t in e["foods"])
+    sick_c = Counter(t for e in entries for t in e.get("sick") or [])
+    out["topTags"] = [{"name": n, "days": c} for n, c in tags_c.most_common(8)]
+    out["topFoods"] = [{"name": n, "days": c} for n, c in foods_c.most_common(8)]
+    out["topSick"] = [{"name": n, "days": c} for n, c in sick_c.most_common(5)]
+    # What goes with a better or worse mood: days with vs. without, when
+    # there are at least 3 of each.
+    rated = [e for e in entries if e["mood"] is not None]
+    found = []
+
+    def compare(label: str, kind: str, has) -> None:
+        yes = [e["mood"] for e in rated if has(e)]
+        no = [e["mood"] for e in rated if not has(e)]
+        if len(yes) >= 3 and len(no) >= 3:
+            d = mean(yes) - mean(no)
+            if abs(d) >= 0.3:
+                found.append({"label": label, "kind": kind, "with": round(mean(yes), 1),
+                              "without": round(mean(no), 1), "diff": round(d, 1), "days": len(yes)})
+    for t in tags_c:
+        compare(t, "Aktivitet", lambda e, t=t: t in e["tags"])
+    for f in foods_c:
+        compare(f, "Mad", lambda e, f=f: f in e["foods"])
+    compare("Motion 1 time eller mere", "Vane", lambda e: (e.get("exercise") or 0) >= 60)
+    compare("Alkohol", "Vane", lambda e: (e["alcohol"] or 0) > 0)
+    compare("Sodavand", "Vane", lambda e: (e.get("soda") or 0) > 0)
+    compare("Syg eller skadet", "Sundhed", lambda e: bool(e.get("sick")))
+    found.sort(key=lambda x: -abs(x["diff"]))
+    out["links"] = found[:8]
+    # Streaks of days in a row with something filled in.
+    days = sorted(date.fromisoformat(e["day"]) for e in entries)
+    best = cur = 1
+    for a, b in zip(days, days[1:]):
+        cur = cur + 1 if (b - a).days == 1 else 1
+        best = max(best, cur)
+    out["bestStreak"] = best
+    return out
+
+
 def filled_days(user_id: int, frm: str, to: str) -> list[str]:
     with db.connect() as con:
         return [r[0] for r in con.execute(
@@ -345,13 +508,16 @@ def set_photo(user_id: int, day: str, data: bytes) -> dict:
     return get_entry(user_id, day)
 
 
-def photo_file(user_id: int, day: str) -> Path:
-    """The author's own photo - user_id is always the signed-in person."""
+def photo_file(user_id: int, day: str, viewer: dict | None = None) -> Path:
+    """A day's photo: the author's own, or (0.3.9) a family member's from a
+    day they share - for someone in the family."""
     day = _day(day)
+    if viewer is not None and viewer["id"] != user_id:
+        _may_see(viewer, user_id)
     with db.connect() as con:
-        r = con.execute("SELECT photo FROM dagbog_entries WHERE user_id = ? AND day = ?",
+        r = con.execute("SELECT photo, shared FROM dagbog_entries WHERE user_id = ? AND day = ?",
                         (user_id, day)).fetchone()
-    if not r or not r["photo"]:
+    if not r or not r["photo"] or (viewer is not None and viewer["id"] != user_id and not r["shared"]):
         raise NotFound("Intet billede.")
     path = photos_dir(user_id) / r["photo"]
     if not path.is_file():

@@ -24,8 +24,8 @@ export function DagbogAdmin() {
     <div className="fma">
       <header className="fma-head">
         <span className="fma-title">Dagbog</span>
-        <span className="fma-stats">Everyone rates their day on the front page. The family sees ratings, food and
-          activities; the day's highlight text and photo are only ever shown to their author.</span>
+        <span className="fma-stats">Everyone rates their day on the front page. The family sees each other's days -
+          the text and photo too, unless the author keeps that day to themselves.</span>
       </header>
       <div className="fma-main fma-scroll fma-pad dg-admin">
         <section className="settings-group" data-help="dagbog.members">

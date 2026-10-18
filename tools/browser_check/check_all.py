@@ -264,7 +264,9 @@ with sync_playwright() as p:
     fp.locator(".hm-field[aria-label='Sygdom og skader'] .hm-tags button", has_text="Hoste").click()
     fp.locator(".hm-tags button", has_text="Sport").click()
     fp.locator(".hm-tags button", has_text="Børnepasning").click()
-    fp.locator("textarea.hm-text").fill("Hemmelig dagbogstekst")
+    check("the text says the family sees it (0.3.9)",
+          fp.locator(".hm-share input").is_checked() and "Familien kan se" in fp.locator(".hm-share").inner_text())
+    fp.locator("textarea.hm-text").fill("Delt dagbogstekst")
     from PIL import Image
     import io
     buf = io.BytesIO()
@@ -280,7 +282,7 @@ with sync_playwright() as p:
     sw = fp.evaluate("document.documentElement.scrollWidth")
     check("Dagbog fits the phone", sw <= 390, f"scrollWidth {sw}")
     fp.locator(".hm-tabs a", has_text="Familien").click()
-    fp.wait_for_selector(".hm-week")
+    fp.wait_for_selector(".hm-person")
     fp.screenshot(path=f"{OUT}/10-dagbog-family.png", full_page=True)
     fp.goto(BASE + "/fm/")
     fp.locator(".fm-burger").click()
@@ -296,20 +298,36 @@ with sync_playwright() as p:
     wait_until(ph, lambda: ph.locator(".hm-tile-name", has_text="Økonomi").count() == 1)
     tiles = ph.locator(".hm-tile-name").all_inner_texts()
     check("the admin's tiles include Økonomi", "Økonomi" in tiles, str(tiles))
-    # The admin sees mor's day in the family week - and never her text.
+    # 0.3.9: the family per person - mor's card, her days with text and photo, her statistics.
     ph.goto(BASE + "/#/dagbog/familien")
-    ph.wait_for_selector(".hm-week")
-    row = ph.locator(".hm-week tbody tr", has_text="mor")
-    check("the family week shows mor's mood", "🙂" in row.inner_text(), row.inner_text())
-    row.locator(".hm-cell:not(.hm-empty)").first.click()
-    detail = ph.locator(".hm-detail").inner_text()
-    check("the day's detail has ratings, food and activities, not the text",
-          "Sport" in detail and "Kage" in detail and "Børnepasning" in detail
-          and "7/10" in detail and "Hemmelig" not in detail
-          and "kun for mor" in detail, detail[:200])
-    check("mor's text is nowhere on the admin's page", "Hemmelig" not in ph.content())
-    ph.screenshot(path=f"{OUT}/11-admin-family-week.png", full_page=True)
-    ph.locator(".fm-back").click()
+    ph.wait_for_selector(".hm-person")
+    card = ph.locator(".hm-person", has_text="mor")
+    check("mor's card shows her week and her text", "🙂" in card.inner_text() and "Delt dagbogstekst" in card.inner_text(),
+          card.inner_text())
+    ph.screenshot(path=f"{OUT}/11-admin-family.png", full_page=True)
+    card.click()
+    ph.wait_for_selector(".hm-daycard")
+    day = ph.locator(".hm-daycard").first.inner_text()
+    check("mor's day has ratings, food, activities and her text",
+          all(x in day for x in ("Sport", "Kage", "Børnepasning", "7/10", "Delt dagbogstekst", "Hoste")), day[:240])
+    img = ph.locator(".hm-daycard-photo").first
+    img.wait_for()
+    wait_until(ph, lambda: img.evaluate("i => i.complete && i.naturalWidth > 0"))
+    check("the admin sees mor's photo", img.evaluate("i => i.naturalWidth") > 0)
+    check("the month calendar shows her day", ph.locator(".hm-cal-day.hm-has").count() >= 1)
+    sw = ph.evaluate("document.documentElement.scrollWidth")
+    check("a person's days fit the phone", sw <= 390, f"scrollWidth {sw}")
+    ph.screenshot(path=f"{OUT}/11b-person-days.png", full_page=True)
+    ph.locator(".hm-subtabs a", has_text="Statistik").click()
+    ph.wait_for_selector(".hm-kpi")
+    kpis = ph.locator(".hm-kpis").inner_text()
+    check("her statistics count the day", "Dage skrevet" in kpis and "Humør" in kpis, kpis[:200])
+    ph.locator(".hm-range button", has_text="Alt").click()
+    wait_until(ph, lambda: ph.locator(".hm-range button.on").inner_text() == "Alt")
+    sw = ph.evaluate("document.documentElement.scrollWidth")
+    check("the statistics fit the phone", sw <= 390, f"scrollWidth {sw}")
+    ph.screenshot(path=f"{OUT}/11c-person-stats.png", full_page=True)
+    ph.goto(BASE + "/")
     ph.wait_for_selector(".hm-tiles")
     # ---- Økonomi on the phone (0.3.0) -------------------------------------------------------
     ph.locator(".hm-tile", has_text="Økonomi").click()
@@ -333,7 +351,8 @@ with sync_playwright() as p:
     ph.get_by_role("button", name="Posteringer", exact=True).click()
     ph.get_by_label("Søg i posteringer").fill("netto")
     wait_until(ph, lambda: ph.locator(".ok-tx-full .ok-tx-row").count() > 0
-               and all("Netto" in x for x in ph.locator(".ok-tx-full .ok-tx-text").all_inner_texts()[:5]))
+               and all("Netto" in x for x in ph.locator(".ok-tx-full .ok-tx-text").all_inner_texts()[:5])
+               and "posteringer" in ph.locator(".ok-tx-full").locator("xpath=..").inner_text())
     check("searching the transactions", ph.locator(".ok-tx-full .ok-tx-row").count() > 0
           and "posteringer" in ph.locator(".ok-tx-full").locator("xpath=..").inner_text())
     ph.screenshot(path=f"{OUT}/12b-okonomi-search.png", full_page=True)

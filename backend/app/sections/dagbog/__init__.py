@@ -108,6 +108,25 @@ def _m004_more_fields(con: sqlite3.Connection) -> None:
                         (json.dumps([x for x in foods if str(x).lower() != "sodavand"], ensure_ascii=False),))
 
 
+def _m005_shared(con: sqlite3.Connection) -> None:
+    """0.3.9 (Søren): the family sees each other's text and photo. A day
+    says whether its author shares it - new days do by default. Days that
+    already have a text or photo were written while "kun du kan se" was the
+    promise, so they stay private until their author shares them."""
+    from app.core.migrations import add_column
+    add_column(con, "dagbog_entries", "shared", "INTEGER NOT NULL DEFAULT 1")
+    con.execute("UPDATE dagbog_entries SET shared = 0 WHERE highlight <> '' OR photo IS NOT NULL")
+    # Vitaminer on the food list (Søren, 0.3.9) - also on a list already saved.
+    import json
+    r = con.execute("SELECT value FROM dagbog_settings WHERE key = 'foods'").fetchone()
+    if r:
+        foods = json.loads(r[0])
+        if not any(f.lower() == "vitaminer" for f in foods):
+            foods.append("Vitaminer")
+            con.execute("UPDATE dagbog_settings SET value = ? WHERE key = 'foods'",
+                        (json.dumps(foods, ensure_ascii=False),))
+
+
 SECTION = Section(
     id="dagbog",
     title="Dagbog",
@@ -115,7 +134,8 @@ SECTION = Section(
     migrations=[(1, "dagbog entries, settings, members", _m001_dagbog),
                 (2, "food categories", _m002_foods),
                 (3, "mental readiness 1-10, childcare activity", _m003_mental_ten),
-                (4, "motion, sodavand, sickness", _m004_more_fields)],
+                (4, "motion, sodavand, sickness", _m004_more_fields),
+                (5, "text and photo shared with the family", _m005_shared)],
     family_prefixes=("/api/dagbog/",),
     on_user_deleted=dagbog.forget_user,
 )

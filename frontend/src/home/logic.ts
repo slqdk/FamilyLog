@@ -3,14 +3,14 @@
 export type HomeRoute =
   | { name: 'home' }
   | { name: 'dagbog'; day: string | null }
-  | { name: 'family'; week: string | null }
+  | { name: 'family'; person: number | null; stats?: boolean }
   | { name: 'okonomi'; month: string | null }
   | { name: 'cyklus' }
   | { name: 'cyklusDay'; day: string }
   | { name: 'cyklusCal'; month: string | null }
   | { name: 'cyklusShare' };
 
-/** #/ · #/dagbog · #/dagbog/2026-10-17 · #/dagbog/familien[/2026-10-12]
+/** #/ · #/dagbog · #/dagbog/2026-10-17 · #/dagbog/familien[/<person id>[/statistik]]
     · #/okonomi[/2026-10] · #/cyklus · #/cyklus/dag/2026-10-17
     · #/cyklus/kalender[/2026-10] · #/cyklus/deling */
 export function parseRoute(hash: string): HomeRoute {
@@ -25,7 +25,11 @@ export function parseRoute(hash: string): HomeRoute {
     return { name: 'cyklus' };
   }
   if (parts[0] === 'dagbog') {
-    if (parts[1] === 'familien') return { name: 'family', week: isDay(parts[2]) ? parts[2] : null };
+    if (parts[1] === 'familien') {
+      // 0.3.9: per person (an old week link, /familien/2026-10-12, lands on the family).
+      const id = /^\d+$/.test(parts[2] ?? '') ? Number(parts[2]) : null;
+      return id == null ? { name: 'family', person: null } : { name: 'family', person: id, stats: parts[3] === 'statistik' };
+    }
     return { name: 'dagbog', day: isDay(parts[1]) ? parts[1] : null };
   }
   return { name: 'home' };
@@ -35,7 +39,7 @@ export function routeHash(r: HomeRoute): string {
   switch (r.name) {
     case 'home': return '#/';
     case 'dagbog': return r.day ? `#/dagbog/${r.day}` : '#/dagbog';
-    case 'family': return r.week ? `#/dagbog/familien/${r.week}` : '#/dagbog/familien';
+    case 'family': return r.person == null ? '#/dagbog/familien' : `#/dagbog/familien/${r.person}${r.stats ? '/statistik' : ''}`;
     case 'okonomi': return r.month ? `#/okonomi/${r.month}` : '#/okonomi';
     case 'cyklus': return '#/cyklus';
     case 'cyklusDay': return `#/cyklus/dag/${r.day}`;

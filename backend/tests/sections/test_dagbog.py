@@ -1,6 +1,7 @@
-"""Dagbog (0.2.0): one entry per person per day; the family sees ratings
-and tags, the highlight text and photo stay with the author - the
-administrator included."""
+"""Dagbog (0.2.0): one entry per person per day. The family (the family
+accounts and the administrator) sees each other's days - since 0.3.9 the
+text and photo too, of a day its author shares; a user account's days are
+its own."""
 from __future__ import annotations
 
 import io
@@ -41,7 +42,7 @@ def test_config_has_every_field_and_the_default_tags(client):
     assert (c["fields"][0]["max"], c["fields"][1]["max"]) == (5, 10)     # mood 1-5, overskud 1-10
     for t in ("Sport", "Computer", "Fjernsyn", "Vedligehold af hus og have", "Børnepasning"):
         assert t in c["tags"]
-    for f in ("Hjemmelavet", "Fastfood", "Kage", "Chips"):
+    for f in ("Hjemmelavet", "Fastfood", "Kage", "Chips", "Vitaminer"):
         assert f in c["foods"]
 
 
@@ -74,27 +75,115 @@ def test_validation_speaks_danish(client):
         assert r.status_code == 400 and needle in r.json()["detail"], (body, r.text)
 
 
-def test_the_family_sees_ratings_but_never_the_text_or_photo(client):
+def test_the_family_sees_the_text_and_photo_of_a_shared_day(client):
+    """0.3.9 (Søren): "make the text and pictures from dagbog visible to
+    everyone" - in the family. A day its author keeps private stays private."""
     mor = _login(client, "mor", "familie-kode-1")
-    assert mor.put("/api/dagbog/entry", json={**FULL, "highlight": "Min hemmelighed"}).status_code == 200
+    sanne = _login(client, "sanne", "pw-sanne-12345", role="user")
+    mor_id = next(u["id"] for u in client.get("/api/users").json() if u["username"] == "mor")
+    e = mor.put("/api/dagbog/entry", json={**FULL, "highlight": "Vi vandt"}).json()["entry"]
+    assert e["shared"] is True                                  # shared unless she says otherwise
     assert mor.post(f"/api/dagbog/photo?day={TODAY}",
                     files={"file": ("a.jpg", _jpeg(), "image/jpeg")}).status_code == 200
-    client.put("/api/dagbog/entry", json={"day": YESTERDAY, "mood": 5, "highlight": "Admins tekst"})
-    for viewer in (client, mor):                              # admin and family alike
-        fam = viewer.get(f"/api/dagbog/family?frm={YESTERDAY}&to={TODAY}")
-        assert fam.status_code == 200
-        assert "hemmelighed" not in fam.text and "Admins tekst" not in fam.text
-        rows = fam.json()["entries"]
-        assert {(e["day"], e["mood"]) for e in rows} == {(TODAY, 4), (YESTERDAY, 5)}
-        assert all("highlight" not in e and "hasPhoto" not in e for e in rows)
-    # The photo is the author's: the admin asking for "their" photo gets their own - none.
-    assert client.get(f"/api/dagbog/photo?day={TODAY}").status_code == 404
-    photo = mor.get(f"/api/dagbog/photo?day={TODAY}")
+    mor.put("/api/dagbog/entry", json={"day": YESTERDAY, "mood": 2, "highlight": "Min hemmelighed",
+                                       "shared": False})
+    for viewer in (client, mor):                                # admin and family alike
+        fam = viewer.get(f"/api/dagbog/family?frm={YESTERDAY}&to={TODAY}").json()["entries"]
+        today = next(x for x in fam if x["day"] == TODAY)
+        assert today["highlight"] == "Vi vandt" and today["hasPhoto"] is True
+        assert "hemmelighed" not in str(fam)
+    # The photo of her shared day, for the admin; never for a user account.
+    photo = client.get(f"/api/dagbog/photo?day={TODAY}&user={mor_id}")
     assert photo.status_code == 200 and photo.content[:3] == b"\xff\xd8\xff"
     from PIL import Image
     assert 0x8825 not in Image.open(io.BytesIO(photo.content)).getexif()     # GPS stripped
-    assert mor.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"]["highlight"] == "Min hemmelighed"
-    assert client.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"] is None
+    assert sanne.get(f"/api/dagbog/photo?day={TODAY}&user={mor_id}").status_code == 403
+    # Without user= it is your own: the admin has none.
+    assert client.get(f"/api/dagbog/photo?day={TODAY}").status_code == 404
+    # She makes today private: text and photo go from the family's view.
+    mor.put("/api/dagbog/entry", json={**FULL, "highlight": "Vi vandt", "shared": False})
+    assert client.get(f"/api/dagbog/photo?day={TODAY}&user={mor_id}").status_code == 404
+    fam = client.get(f"/api/dagbog/family?frm={TODAY}&to={TODAY}").json()["entries"][0]
+    assert "highlight" not in fam and "hasPhoto" not in fam and "shared" not in fam
+    own = mor.get(f"/api/dagbog/entry?day={TODAY}").json()["entry"]
+    assert own["highlight"] == "Vi vandt" and own["hasPhoto"] and own["shared"] is False
+    assert mor.put("/api/dagbog/entry", json={"day": TODAY, "shared": "ja"}).status_code == 400
+
+
+def test_one_persons_days_go_back_as_far_as_there_are(client):
+    """0.3.9: the overview per person, newest first, a page at a time."""
+    mor = _login(client, "mor", "familie-kode-1")
+    sanne = _login(client, "sanne", "pw-sanne-12345", role="user")
+    users = {u["username"]: u["id"] for u in client.get("/api/users").json()}
+    for i in range(25):
+        d = (date.today() - timedelta(days=i * 9)).isoformat()            # more than 200 days back
+        assert mor.put("/api/dagbog/entry", json={"day": d, "mood": 1 + i % 5}).status_code == 200
+    page = client.get(f"/api/dagbog/person?user={users['mor']}&limit=10").json()
+    assert page["person"]["username"] == "mor" and not page["own"] and page["more"]
+    assert len(page["entries"]) == 10 and page["entries"][0]["day"] == TODAY and page["total"] == 25
+    days = [e["day"] for e in page["entries"]]
+    while page["more"]:
+        page = client.get(f"/api/dagbog/person?user={users['mor']}&limit=10&before={days[-1]}").json()
+        days += [e["day"] for e in page["entries"]]
+    assert len(days) == 25 and days == sorted(days, reverse=True) and days[-1] == page["firstDay"]
+    month = mor.get(f"/api/dagbog/person/month?user={users['mor']}&month={TODAY[:7]}").json()
+    assert month["days"][TODAY] == 1
+    assert mor.get(f"/api/dagbog/person?user={users['admin']}").json()["own"] is False
+    # A user account: only its own days, and nobody in the family sees them.
+    assert sanne.get(f"/api/dagbog/person?user={users['mor']}").status_code == 403
+    assert sanne.get(f"/api/dagbog/person?user={users['sanne']}").json()["own"] is True
+    assert mor.get(f"/api/dagbog/person?user={users['sanne']}").status_code == 403
+    assert mor.get(f"/api/dagbog/stats?user={users['sanne']}").status_code == 403
+    assert client.get("/api/dagbog/person?user=999").status_code == 404
+    assert client.get(f"/api/dagbog/person/month?user={users['mor']}&month=2026-13").status_code == 400
+
+
+def test_statistics_for_one_person(client):
+    """0.3.9 (Søren): "we need statistics for the individual"."""
+    mor = _login(client, "mor", "familie-kode-1")
+    uid = next(u["id"] for u in client.get("/api/users").json() if u["username"] == "mor")
+    assert client.get(f"/api/dagbog/stats?user={uid}").json()["days"] == 0
+    for i in range(28):
+        d = (date.today() - timedelta(days=i)).isoformat()
+        sport = i % 2 == 0
+        mor.put("/api/dagbog/entry", json={
+            "day": d, "mood": 5 if sport else 2, "mental": 8 if sport else 4,
+            "exercise": 60 if sport else 0, "alcohol": 0 if sport else 2,
+            "tags": ["Sport"] if sport else ["Fjernsyn"], "foods": ["Hjemmelavet"],
+            "sick": ["Hoste"] if i in (3, 5) else []})
+    s = mor.get(f"/api/dagbog/stats?user={uid}").json()
+    assert s["days"] == 28 and s["coverage"] == 100 and s["bestStreak"] == 28
+    assert s["mood"] == 3.5 and s["mental"] == 6.0 and s["sickDays"] == 2
+    assert s["exerciseHoursPerWeek"] == 3.5 and s["alcoholPerWeek"] == 7.0
+    assert s["topFoods"][0] == {"name": "Hjemmelavet", "days": 28}
+    assert {t["name"] for t in s["topTags"]} == {"Sport", "Fjernsyn"}
+    assert len(s["weekdays"]) == 7 and sum(m["days"] for m in s["months"]) == 28
+    links = {x["label"]: x for x in s["links"]}
+    assert links["Sport"]["diff"] == 3.0 and links["Motion 1 time eller mere"]["with"] == 5.0
+    assert links["Alkohol"]["diff"] == -3.0 and "Hjemmelavet" not in links    # eaten every day: nothing to compare
+    week = mor.get(f"/api/dagbog/stats?user={uid}&frm={(date.today() - timedelta(days=6)).isoformat()}").json()
+    assert week["days"] == 7 and week["span"] == 7
+    assert client.get(f"/api/dagbog/stats?user={uid}&frm=igår").status_code == 400
+
+
+def test_migration_5_keeps_old_texts_private(fresh_db):
+    """Days written while "kun du kan se teksten og billedet" was the promise
+    stay private until their author shares them."""
+    from app.core import auth, db
+    from app.sections.dagbog import _m005_shared, dagbog
+    u = auth.create_user("mor", "familie-kode-1", "family")
+    dagbog.set_foods(["Pizza"])
+    with db.connect() as con:
+        for d, text in ((TODAY, "Gammel tekst"), (YESTERDAY, "")):
+            con.execute("INSERT INTO dagbog_entries (user_id, day, mood, tags, highlight, created_at,"
+                        " updated_at) VALUES (?, ?, 3, '[]', ?, 'x', 'x')", (u["id"], d, text))
+        _m005_shared(con)
+    assert dagbog.get_entry(u["id"], TODAY)["shared"] is False
+    assert dagbog.get_entry(u["id"], YESTERDAY)["shared"] is True
+    assert dagbog.foods() == ["Pizza", "Vitaminer"]                  # added to a saved list too
+    with db.connect() as con:
+        _m005_shared(con)                                             # once only
+    assert dagbog.foods() == ["Pizza", "Vitaminer"]
 
 
 def test_the_admin_sets_tags_and_fields_per_person(client):

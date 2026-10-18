@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type OkOverview } from './api';
+import { homeApi, type ChatState, type CyDayInfo, type CyOwn, type CyState, type DagbogConfig, type DagbogEntry, type DagbogStats, type OkOverview } from './api';
 import { Shortcuts } from './HomeApp';
 import { Chat } from './Chat';
 import { DagbogPage, hoursText, weekNumber } from './Dagbog';
+import { FamilyPage } from './DagbogFamily';
 import { CyklusCalendar, CyklusDayPage, CyklusPage } from './Cyklus';
 import { OkonomiPage } from './Okonomi';
 import { addDays, addMonths, dayTitle, face, kr, longDate, mean, monthGrid, monthTitle, parseRoute, routeHash, todayLocal, weekStart } from './logic';
@@ -13,9 +14,12 @@ describe('front page logic', () => {
     expect(parseRoute('')).toEqual({ name: 'home' });
     expect(parseRoute('#/dagbog')).toEqual({ name: 'dagbog', day: null });
     expect(parseRoute('#/dagbog/2026-10-15')).toEqual({ name: 'dagbog', day: '2026-10-15' });
-    expect(parseRoute('#/dagbog/familien/2026-10-12')).toEqual({ name: 'family', week: '2026-10-12' });
+    expect(parseRoute('#/dagbog/familien/2026-10-12')).toEqual({ name: 'family', person: null });   // an old week link
+    expect(parseRoute('#/dagbog/familien/4')).toEqual({ name: 'family', person: 4, stats: false });
+    expect(parseRoute('#/dagbog/familien/4/statistik')).toEqual({ name: 'family', person: 4, stats: true });
+    expect(routeHash({ name: 'family', person: 4, stats: true })).toBe('#/dagbog/familien/4/statistik');
     expect(parseRoute('#/dagbog/x')).toEqual({ name: 'dagbog', day: null });
-    expect(routeHash({ name: 'family', week: null })).toBe('#/dagbog/familien');
+    expect(routeHash({ name: 'family', person: null })).toBe('#/dagbog/familien');
     expect(parseRoute('#/okonomi/2026-09')).toEqual({ name: 'okonomi', month: '2026-09' });
     expect(parseRoute('#/okonomi/2026-13')).toEqual({ name: 'okonomi', month: null });
     expect(parseRoute('#/cyklus/dag/2026-10-17')).toEqual({ name: 'cyklusDay', day: '2026-10-17' });
@@ -190,12 +194,92 @@ describe('Dagbog', () => {
     fireEvent.click(screen.getByText('Feber'));
     fireEvent.change(screen.getByLabelText('Om sygdommen'), { target: { value: 'I seng' } });
     fireEvent.change(screen.getByPlaceholderText('Hvad var det bedste ved dagen?'), { target: { value: 'Mål!' } });
-    expect(screen.getByText('🔒 Kun du kan se teksten og billedet.')).toBeInTheDocument();
+    // 0.3.9: the family sees the text and photo - unless she keeps the day to herself.
+    const share = screen.getByRole('checkbox', { name: '👪 Familien kan se teksten og billedet' });
+    expect(share).toBeChecked();
+    fireEvent.click(share);
+    expect(screen.getByText('🔒 Kun du kan se teksten og billedet')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Gem dagen'));
     await waitFor(() => expect(save).toHaveBeenCalledWith({
       day: '2026-10-17', mood: 4, mental: 8, alcohol: 2, exercise: 90, soda: null, foods: ['Hjemmelavet', 'Kage'],
-      tags: ['Sport'], sick: ['Feber'], sickNote: 'I seng', highlight: 'Mål!' }));
+      tags: ['Sport'], sick: ['Feber'], sickNote: 'I seng', highlight: 'Mål!', shared: false }));
     expect(await screen.findByText('Gemt ✓')).toBeInTheDocument();
+  });
+
+  it('a user account has no family: its text is its own', async () => {
+    vi.spyOn(homeApi, 'dagbogConfig').mockResolvedValue(CONFIG);
+    vi.spyOn(homeApi, 'entry').mockResolvedValue({ entry: null });
+    render(<DagbogPage day="2026-10-17" role="user" />);
+    expect(await screen.findByText('🔒 Kun du kan se teksten og billedet.')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+});
+
+const ME = { id: 1, username: 'admin', role: 'admin' };
+const MEMBERS = [{ id: 1, username: 'admin', fields: [] }, { id: 2, username: 'mor', fields: [] }];
+const dayOf = (day: string, more: Partial<DagbogEntry> = {}): DagbogEntry => ({
+  userId: 2, day, mood: 4, mental: 7, alcohol: 0, exercise: 60, soda: 1, foods: ['Vitaminer'], tags: ['Sport'],
+  sick: [], sickNote: '', updatedAt: 'v', ...more });
+
+describe('Dagbog → Familien (0.3.9)', () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it('a card per person with the last seven days and the newest text', async () => {
+    const today = todayLocal();
+    vi.spyOn(homeApi, 'family').mockResolvedValue({ from: addDays(today, -6), to: today, members: MEMBERS,
+      entries: [dayOf(today, { mood: 5, highlight: 'Vi vandt' }), dayOf(addDays(today, -1), { mood: 3 })] });
+    render(<FamilyPage me={ME} person={null} />);
+    const mor = await screen.findByRole('link', { name: 'mor: åbn' });
+    expect(mor).toHaveAttribute('href', '#/dagbog/familien/2');
+    expect(mor.textContent).toContain('“Vi vandt”');
+    expect(mor.textContent).toContain('4,0');                                 // her week's mood
+    expect(screen.getByRole('link', { name: 'Mig: åbn' }).textContent).toContain('Intet i ugen');
+  });
+
+  it("a person's days with text and photo, going back a page at a time", async () => {
+    const today = todayLocal();
+    vi.spyOn(homeApi, 'family').mockResolvedValue({ from: today, to: today, members: MEMBERS, entries: [] });
+    vi.spyOn(homeApi, 'personMonth').mockResolvedValue({ month: today.slice(0, 7), days: { [today]: 4 } });
+    const person = vi.spyOn(homeApi, 'person')
+      .mockResolvedValueOnce({ person: { id: 2, username: 'mor' }, own: false, fields: [], total: 3, firstDay: '2025-01-02',
+        more: true, entries: [dayOf(today, { highlight: 'Vi vandt', hasPhoto: true, sick: ['Hoste'], sickNote: 'Lidt' })] })
+      .mockResolvedValueOnce({ person: { id: 2, username: 'mor' }, own: false, fields: [], total: 3, firstDay: '2025-01-02',
+        more: false, entries: [dayOf('2025-01-02', { mood: 2 })] });
+    render(<FamilyPage me={ME} person={2} />);
+    expect(await screen.findByText('Vi vandt')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /mor/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByAltText(/Billede fra/).getAttribute('src')).toContain('&user=2');
+    expect(screen.getByText('🏃 1 t motion')).toBeInTheDocument();
+    expect(screen.getByText('🤒 Hoste')).toBeInTheDocument();
+    expect(screen.queryByText('Ret')).toBeNull();                               // not hers to edit
+    fireEvent.click(screen.getByText('Hent ældre dage'));
+    expect(await screen.findByText('Det var alle 3 dage - siden torsdag 2. jan.', { exact: false })).toBeInTheDocument();
+    expect(person).toHaveBeenLastCalledWith(2, today);
+    // The calendar jumps the list to a day.
+    fireEvent.click(screen.getByRole('button', { name: /I dag, humør 4/ }));
+    await waitFor(() => expect(person).toHaveBeenLastCalledWith(2, addDays(today, 1)));
+  });
+
+  it("a person's statistics", async () => {
+    const today = todayLocal();
+    vi.spyOn(homeApi, 'family').mockResolvedValue({ from: today, to: today, members: MEMBERS, entries: [] });
+    const s: DagbogStats = { person: { id: 2, username: 'mor' }, from: null, to: null, days: 28,
+      fields: ['mood', 'mental', 'exercise', 'tags', 'foods'], span: 28, coverage: 100, mood: 3.5, mental: 6,
+      exerciseHoursPerWeek: 3.5, alcoholPerWeek: 7, sodaPerWeek: 0, sickDays: 0, bestStreak: 28,
+      months: [{ month: '2026-09', days: 10, mood: 3, mental: 5, exerciseHours: 4, alcohol: 2 },
+               { month: '2026-10', days: 18, mood: 4, mental: 7, exerciseHours: 8, alcohol: 0 }],
+      weekdays: [4, 3, null, 3, 5, 4, 4], topTags: [{ name: 'Sport', days: 14 }], topFoods: [{ name: 'Vitaminer', days: 28 }],
+      topSick: [], links: [{ label: 'Sport', kind: 'Aktivitet', with: 5, without: 2, diff: 3, days: 14 }] };
+    const stats = vi.spyOn(homeApi, 'dagbogStats').mockResolvedValue(s);
+    render(<FamilyPage me={ME} person={2} stats />);
+    expect(await screen.findByText('Det følger med humøret')).toBeInTheDocument();
+    expect(screen.getByText('Humør 5,0 med, 2,0 uden')).toBeInTheDocument();
+    expect(screen.getByText('3,5 t')).toBeInTheDocument();
+    expect(screen.queryByText('Alkohol')).toBeNull();                           // not one of her fields
+    expect(screen.getByText('Vitaminer')).toBeInTheDocument();
+    expect(stats).toHaveBeenLastCalledWith(2, addDays(today, -29));
+    fireEvent.click(screen.getByRole('button', { name: 'Alt' }));
+    await waitFor(() => expect(stats).toHaveBeenLastCalledWith(2, ''));
   });
 });
 

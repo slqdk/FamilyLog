@@ -48,8 +48,24 @@ export interface DagbogEntry {
   mood: number | null; mental: number | null; alcohol: number | null;
   exercise?: number | null; soda?: number | null; sick?: string[]; sickNote?: string;
   foods: string[]; tags: string[]; updatedAt: string;
-  /** only on the author's own entry */
+  /** the author's own entry, or a day its author shares with the family (0.3.9) */
   highlight?: string; hasPhoto?: boolean;
+  /** only on the author's own entry: the text and photo are shared with the family */
+  shared?: boolean;
+}
+export interface DagbogPerson {
+  person: { id: number; username: string }; own: boolean; fields: string[];
+  entries: DagbogEntry[]; more: boolean; firstDay: string | null; total: number;
+}
+export interface DagbogCount { name: string; days: number }
+export interface DagbogStats {
+  person: { id: number; username: string }; from: string | null; to: string | null; days: number; fields: string[];
+  span?: number; coverage?: number; mood?: number | null; mental?: number | null;
+  exerciseHoursPerWeek?: number; alcoholPerWeek?: number; sodaPerWeek?: number; sickDays?: number; bestStreak?: number;
+  months?: { month: string; days: number; mood: number | null; mental: number | null; exerciseHours: number; alcohol: number }[];
+  weekdays?: (number | null)[];
+  topTags?: DagbogCount[]; topFoods?: DagbogCount[]; topSick?: DagbogCount[];
+  links?: { label: string; kind: string; with: number; without: number; diff: number; days: number }[];
 }
 export interface DagbogFamily {
   from: string; to: string;
@@ -169,6 +185,13 @@ export const homeApi = {
     fetch('/api/dagbog/entry', send('PUT', body)).then(json<{ entry: DagbogEntry }>),
   deleteEntry: (day: string) => fetch(`/api/dagbog/entry?day=${day}`, { method: 'DELETE' }).then(json<{ ok: boolean }>),
   family: (frm: string, to: string) => fetch(`/api/dagbog/family?frm=${frm}&to=${to}`).then(json<DagbogFamily>),
+  person: (user: number, before: string | null, limit = 20) =>
+    fetch(`/api/dagbog/person?user=${user}&limit=${limit}${before ? `&before=${before}` : ''}`).then(json<DagbogPerson>),
+  personMonth: (user: number, month: string) =>
+    fetch(`/api/dagbog/person/month?user=${user}&month=${month}`)
+      .then(json<{ month: string; days: Record<string, number | null> }>),
+  dagbogStats: (user: number, frm: string) =>
+    fetch(`/api/dagbog/stats?user=${user}${frm ? `&frm=${frm}` : ''}`).then(json<DagbogStats>),
   mine: (frm: string, to: string) => fetch(`/api/dagbog/mine?frm=${frm}&to=${to}`).then(json<{ days: string[] }>),
   uploadPhoto: (day: string, file: File) => {
     const fd = new FormData();
@@ -229,5 +252,6 @@ export const homeApi = {
   cySaveSettings: (s: Partial<CySettings>) => fetch('/api/cyklus/settings', send('PUT', s))
     .then(json<{ settings: CySettings; candidates: { id: number; username: string; gender: string }[] }>),
 
-  photoUrl: (day: string, v: string) => `/api/dagbog/photo?day=${day}&v=${encodeURIComponent(v)}`,
+  photoUrl: (day: string, v: string, user?: number) =>
+    `/api/dagbog/photo?day=${day}${user ? `&user=${user}` : ''}&v=${encodeURIComponent(v)}`,
 };

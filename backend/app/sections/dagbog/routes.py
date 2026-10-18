@@ -57,6 +57,30 @@ def dagbog_family(frm: str, to: str, request: Request):
     return _call(dagbog.family, frm, to)
 
 
+def _family_call(fn, *args):
+    try:
+        return _call(fn, *args)
+    except dagbog.Forbidden as exc:
+        raise HTTPException(403, str(exc))
+
+
+@router.get("/api/dagbog/person")
+def dagbog_person(user: int, request: Request, before: str = "", limit: int = 20):
+    """One person's days, newest first, going back (0.3.9)."""
+    return _family_call(dagbog.person_days, request.state.user, user, before or None, limit)
+
+
+@router.get("/api/dagbog/person/month")
+def dagbog_person_month(user: int, month: str, request: Request):
+    return _family_call(dagbog.month_moods, request.state.user, user, month)
+
+
+@router.get("/api/dagbog/stats")
+def dagbog_stats(user: int, request: Request, frm: str = "", to: str = ""):
+    """One person's statistics (0.3.9)."""
+    return _family_call(dagbog.stats, request.state.user, user, frm or None, to or None)
+
+
 @router.get("/api/dagbog/mine")
 def dagbog_mine(frm: str, to: str, request: Request):
     """The days this person has filled in (for the calendar dots)."""
@@ -70,8 +94,13 @@ async def dagbog_photo(day: str, request: Request, file: UploadFile = File(...))
 
 
 @router.get("/api/dagbog/photo")
-def dagbog_photo_get(day: str, request: Request):
-    path = _call(dagbog.photo_file, _uid(request), day)
+def dagbog_photo_get(day: str, request: Request, user: int | None = None):
+    """Your own photo, or (0.3.9) a family member's from a day they share."""
+    me = request.state.user
+    try:
+        path = _call(dagbog.photo_file, user or me["id"], day, me)
+    except dagbog.Forbidden as exc:
+        raise HTTPException(403, str(exc))
     return FileResponse(path, media_type="image/jpeg",
                         headers={"Cache-Control": "private, no-cache"})
 
