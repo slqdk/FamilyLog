@@ -1466,6 +1466,36 @@ def describe_spec(spec: dict) -> str:
     return ", ".join(bits)
 
 
+_KIND_DA = {"card": "kort", "mobilepay": "MobilePay", "betalingsservice": "Betalingsservice",
+            "atm": "kontanthævning", "transfer": "overførsel", "interest": "renter", "fee": "gebyr",
+            "salary": "løn", "card-bill": "kortregning", "other": "andet"}
+_GROUP_DA = {"month": "måned", "year": "år", "merchant": "butik", "category": "kategori"}
+
+
+def describe_spec_da(spec: dict) -> str:
+    """describe_spec in Danish, for the front page (Alf in the chat, 0.3.12)."""
+    bits = [{"out": "penge ud", "in": "penge ind", "both": "penge ind og ud"}[spec["direction"]]]
+    if spec["merchants"]:
+        bits.append("hos " + " eller ".join(f'"{m}"' for m in spec["merchants"]))
+    if spec["words"]:
+        bits.append("med " + " og ".join(f'"{w}"' for w in spec["words"]) + " i teksten")
+    if spec["categories"]:
+        bits.append("på " + ", ".join(CATEGORIES[c][1] if c in CATEGORIES else c for c in spec["categories"]))
+    if spec["kinds"]:
+        bits.append("betalt med " + ", ".join(_KIND_DA.get(k, k) for k in spec["kinds"]))
+    if spec["from"] or spec["to"]:
+        bits.append(f"fra {spec['from'] or 'starten'} til {spec['to'] or 'nu'}")
+    else:
+        bits.append("i alle data")
+    if spec.get("account"):
+        bits.append(f"konto {spec['account']}")
+    if spec["group"] != "none":
+        bits.append(f"pr. {_GROUP_DA.get(spec['group'], spec['group'])}")
+    if not spec["includeTransfers"]:
+        bits.append("egne overførsler ikke medregnet")
+    return ", ".join(bits)
+
+
 def kr(x: float | None) -> str:
     """9410.5 -> '9.410,50 kr' - the Danish way, as the bank writes it."""
     if x is None:

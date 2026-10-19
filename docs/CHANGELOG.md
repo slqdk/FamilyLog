@@ -2,6 +2,22 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.12 - 2026-10-19
+
+Alf answers about money.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Økonomi through Alf**: "Hvor meget har jeg brugt på dagligvarer i år?",
+  "Hvad betaler jeg via Betalingsservice?", "og i 2024?". The same three steps
+  as the question box in Økonomi - the model turns the question into a
+  search, the app counts exactly, the model answers from the count only -
+  on the asker's **own** Økonomi, never anyone else's. Asked about someone
+  else's, Alf says each person's Økonomi is their own; without Økonomi, or
+  with no transactions yet, he says what to do.
+- Under the answer: what was counted (in Danish), how many transactions,
+  and a link to Økonomi.
+
 ## 0.3.11 - 2026-10-19
 
 Alf knows the family's Dagbog and Cyklus; every day's text and photo shared.

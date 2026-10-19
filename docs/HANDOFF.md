@@ -5,6 +5,19 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.12 - Start here
+
+Alf's fourth route, `money` (route JSON `money`; at most one of places /
+family / money). `chat._money()` reuses `ledger_ask._understand_input`,
+`ledger.clean_spec`, `ledger.run_spec` and `ledger_ask.result_context` +
+`ANSWER_PROMPT` on `ledger.ledger_for(user)` only - another person named
+gets a fixed refusal, no Økonomi / no rows a fixed hint (no model call).
+The spec is kept in the answer's meta (`spec`, `counted` via the new
+`ledger.describe_spec_da`, `matched`), and the last one is the "previous
+search" for a follow-up. Tests: `tests/sections/ledger/test_alf_money.py`.
+
+---
+
 ## 0.3.11 - Start here
 
 Alf's third route, `family` (`sections/chat/family.py`): the route JSON has

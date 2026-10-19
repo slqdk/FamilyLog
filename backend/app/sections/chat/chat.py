@@ -15,11 +15,15 @@ job in the model queue:
 3. **The family** (0.3.11) - a question about someone's Dagbog or Cyklus
    (or one's own): Alf answers from what the person asking can see in the
    app themselves - see family.py.
-4. **Anything else** - Alf answers as a friendly general assistant, with the
+4. **Money** (0.3.12) - a question about one's own Økonomi: the same three
+   steps as the Økonomi page's own question box (ledger_ask: the model turns
+   it into a search, the app counts exactly, the model writes the answer
+   from the count only) - on the asker's OWN ledger, never anyone else's.
+5. **Anything else** - Alf answers as a friendly general assistant, with the
    conversation so far.
 
-Nothing from Økonomi is sent to the model; from the Dagbog and Cyklus only
-what the person asking can see, and only when the question is about it.
+From Økonomi only the asker's own ledger, from the Dagbog and Cyklus only
+what the asker can see - and only when the question is about it.
 """
 from __future__ import annotations
 
@@ -31,6 +35,7 @@ from datetime import date
 from app.core import db, jobqueue, logs, ollama, settings
 
 from ..familymap import familymap as fm, familymap_ask as fm_ask
+from ..ledger import ledger, ledger_ask
 from . import family
 
 MAX_MESSAGE = 1000
@@ -38,7 +43,7 @@ HISTORY_TURNS = 8            # messages of context sent with a new one
 QUEUE_BASE = 5_000_000       # queue keys -(QUEUE_BASE + user id): never another's
 
 ROUTE_PROMPT = """Afgør hvad familiemedlemmets SIDSTE besked handler om. Svar KUN med JSON:
-{"places": true/false, "family": true/false, "person": "navnet der spørges om, eller null",
+{"places": true/false, "family": true/false, "money": true/false, "person": "navnet der spørges om, eller null",
  "question": "beskeden omskrevet så den kan forstås alene"}
 
 - places = true når der spørges efter konkrete steder at tage hen: spisesteder, caféer, is,
@@ -47,9 +52,13 @@ ROUTE_PROMPT = """Afgør hvad familiemedlemmets SIDSTE besked handler om. Svar K
   ud fra familiens Dagbog eller Cyklus: humør, overskud, motion, alkohol, sodavand, mad, sygdom,
   hvad de har lavet, dagens tekst, statistik - eller menstruation, cyklus, menstruationen, frugtbare dage,
   ægløsning, PMS, humør/adfærd i cyklussen.
+- money = true når der spørges til penge og økonomi ud fra bankens posteringer: forbrug, hvad noget
+  har kostet, hvor meget der er brugt hos en butik eller på en kategori (dagligvarer, benzin, abonnementer),
+  indtægt, løn, faste udgifter, betalingsservice, MobilePay, hvad pengene går til.
 - person: navnet på den der spørges om, som skrevet ("Sanne", "mor"); "mig" når de spørger om sig selv;
   null når det er hele familien eller uklart. Brug samtalen ("hvad med i går?" handler om samme person).
-- places og family er false for alt andet: viden, opskrifter, lektier, planlægning, sjov.
+- Højst én af places, family og money er true.
+- places, family og money er false for alt andet: viden, opskrifter, lektier, planlægning, sjov.
 - question: brug samtalen til at gøre beskeden fuldstændig ("og i Flensborg?" bliver
   "pizza i Flensborg"). Samme sprog som beskeden."""
 
@@ -57,7 +66,8 @@ GENERAL_PROMPT = """Du er Alf, en venlig hjælper i familiens app FamilyLog. Fam
 I dag er det %(today)s. Du taler med %(name)s.
 - Svar på det sprog der skrives på (normalt dansk), kort og klart; brug lister når det hjælper.
 - Du kan ikke se internettet her. Spørges der til familiens Dagbog eller Cyklus, kan de spørge direkte,
-  fx "hvordan har mor haft det i denne uge?" eller "hvornår får Sanne menstruation?".
+  fx "hvordan har mor haft det i denne uge?" eller "hvornår får Sanne menstruation?". Om deres egen
+  økonomi kan de spørge fx "hvor meget har jeg brugt på dagligvarer i år?".
 - Bliver du spurgt om steder at tage hen, så sig at de kan spørge "find en legeplads i Vojens"
   eller lignende, så søger du i familiens egne steder.
 - Er du i tvivl, så sig det ærligt."""
@@ -204,13 +214,14 @@ async def route(model: str, history: list[dict], text: str) -> dict:
         out = await _ask_json(model, ROUTE_PROMPT, prompt)
     except Exception as exc:                                  # noqa: BLE001
         logs.record_exception(exc, "Alf chat route")
-        return {"places": False, "family": False, "person": None, "question": text}
+        return {"places": False, "family": False, "money": False, "person": None, "question": text}
     question = " ".join(str(out.get("question") or "").split())[:MAX_MESSAGE] or text
     person = out.get("person")
     person = " ".join(str(person).split())[:60] if isinstance(person, str) and person.strip() else None
     places = bool(out.get("places"))
-    return {"places": places, "family": bool(out.get("family")) and not places, "person": person,
-            "question": question}
+    fam = bool(out.get("family")) and not places
+    money = bool(out.get("money")) and not places and not fam
+    return {"places": places, "family": fam, "money": money, "person": person, "question": question}
 
 
 async def run(user: dict, text: str, history: list[dict], phone: tuple[float, float] | None,
@@ -226,7 +237,11 @@ async def run(user: dict, text: str, history: list[dict], phone: tuple[float, fl
     try:
         step("Forstår beskeden…", "understand")
         r = await route(model, history, text)
-        j["route"] = "places" if r["places"] else "family" if r["family"] else "chat"
+        j["route"] = ("places" if r["places"] else "family" if r["family"] else
+                      "money" if r["money"] else "chat")
+        if r["money"]:
+            await _money(user, r, history, model, j, step)
+            return
         if r["family"]:
             step("Kigger i Dagbog og Cyklus…", "search")
             found = family.gather(user, r["person"])
@@ -286,6 +301,57 @@ async def run(user: dict, text: str, history: list[dict], phone: tuple[float, fl
         j["error"] = f"Alf kunne ikke svare: {str(exc) or exc.__class__.__name__}"
     finally:
         j["finishedAt"] = time.time()
+
+
+def _say(uid: int, j: dict, text: str, meta: dict) -> None:
+    """An answer Alf gives without the model (no Økonomi, someone else's)."""
+    j["text"] = text
+    add_message(uid, "assistant", text, [], meta)
+    j["state"], j["step"] = "done", ""
+
+
+def _previous_money(history: list[dict]) -> dict | None:
+    """The last money question and its search, for a follow-up ("og i 2024?")."""
+    for i in range(len(history) - 1, 0, -1):
+        m = history[i]
+        if m["role"] == "assistant" and m["meta"].get("route") == "money" and m["meta"].get("spec"):
+            q = history[i - 1]["content"] if history[i - 1]["role"] == "user" else ""
+            return {"question": q, "spec": m["meta"]["spec"]}
+    return None
+
+
+async def _money(user: dict, r: dict, history: list[dict], model: str, j: dict, step) -> None:
+    """Økonomi through Alf (0.3.12): the asker's own ledger only."""
+    uid = user["id"]
+    meta: dict = {"route": "money"}
+    who = (r.get("person") or "").lower()
+    if who and who not in family.SELF_WORDS and who not in (user["username"].lower(),
+                                                             (user.get("name") or "").lower()):
+        # Everyone's Økonomi is their own - Alf does not look in another's.
+        return _say(uid, j, f"Jeg kan kun svare på din egen økonomi - {r['person']}s Økonomi er "
+                            f"{r['person']}s egen.", meta)
+    lu = ledger.ledger_for(user)
+    if lu is None:
+        return _say(uid, j, "Du har ikke Økonomi endnu. Bed administratoren slå den til for dig "
+                            "(Indstillinger → Konti), så kan du læse din bankudskrift ind og spørge mig.", meta)
+    if ledger.summary(lu)["count"] == 0:
+        return _say(uid, j, "Der er ingen posteringer endnu. Læs en bankudskrift ind under "
+                            "Økonomi → Dine data, så kan jeg svare.", meta)
+    step("Forstår spørgsmålet…", "understand")
+    system, prompt = ledger_ask._understand_input(lu, r["question"], _previous_money(history))
+    spec = ledger.clean_spec(await ledger_ask._ask_json(model, system, prompt))
+    step("Tæller i dine posteringer…", "search")
+    res = await asyncio.to_thread(ledger.run_spec, lu, spec)
+    counted = ledger.describe_spec_da(spec)
+    step("Skriver svaret…", "write")
+    j["text"] = ""
+    context = ledger_ask.result_context(r["question"], spec, res, ledger.summary(lu))
+    async for piece in ollama.stream_chat(model, [{"role": "system", "content": ledger_ask.ANSWER_PROMPT},
+                                                  {"role": "user", "content": context}], think=False):
+        j["text"] += piece
+    meta.update(counted=counted, spec=spec, matched=res["count"])
+    add_message(uid, "assistant", j["text"].strip(), [], meta)
+    j["state"], j["step"] = "done", ""
 
 
 def reset() -> None:

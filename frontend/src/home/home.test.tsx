@@ -148,6 +148,16 @@ describe('Alf on the front page', () => {
     expect(screen.queryByText(/Vis .* steder/)).toBeNull();
   });
 
+  it('says what was counted when the answer is from your Økonomi (0.3.12)', async () => {
+    vi.spyOn(homeApi, 'chat').mockResolvedValue({ model: true, job: null, messages: [
+      { id: 1, role: 'user', content: 'Hvad har jeg brugt hos Netto?', places: [], createdAt: '', meta: {} },
+      { id: 2, role: 'assistant', content: 'Du har brugt 1.200 kr hos Netto.', places: [], createdAt: '',
+        meta: { route: 'money', counted: 'money out at netto', matched: 9 } }] });
+    render(<Chat me={{ id: 1, username: 'mor', role: 'family' }} resetKey={0} />);
+    expect(await screen.findByText(/Fra din Økonomi · money out at netto · 9 posteringer/)).toBeInTheDocument();
+    expect(screen.getByText('Åbn Økonomi')).toHaveAttribute('href', '#/okonomi');
+  });
+
   it('sends a message from an example and says when there is no model', async () => {
     vi.spyOn(homeApi, 'chat').mockResolvedValue({ model: false, job: null, messages: [] });
     const send = vi.spyOn(homeApi, 'chatSend').mockResolvedValue({

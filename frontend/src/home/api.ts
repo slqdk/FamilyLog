@@ -27,12 +27,13 @@ export interface PlaceCard {
 }
 export interface ChatMessage {
   id: number; role: 'user' | 'assistant'; content: string; places: PlaceCard[];
-  createdAt: string; meta: { route?: string; searched?: string | null; where?: string | null; stopped?: boolean };
+  createdAt: string; meta: { route?: string; searched?: string | null; where?: string | null; stopped?: boolean;
+    counted?: string; matched?: number };
 }
 export interface ChatJob {
   state: 'queued' | 'working' | 'done' | 'failed' | 'stopped';
   step: string; phase: string; text: string; places: PlaceCard[]; error: string | null;
-  route: 'places' | 'family' | 'chat' | null; searched: string | null; where: string | null; ahead?: number;
+  route: 'places' | 'family' | 'money' | 'chat' | null; searched: string | null; where: string | null; ahead?: number;
 }
 export interface ChatState { messages: ChatMessage[]; job: ChatJob | null; model: boolean }
 

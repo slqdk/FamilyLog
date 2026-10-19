@@ -412,6 +412,14 @@ with sync_playwright() as p:
     check("Alf answers about Mette from the Dagbog", "Fra Dagbog og Cyklus: Mette" in alf
           and "Delt dagbogstekst" in alf, alf[:300])
     ph.screenshot(path=f"{OUT}/13b-alf-family.png", full_page=True)
+    # 0.3.12: money - counted in the asker's own Økonomi.
+    ph.locator(".hm-composer textarea").fill("Hvor meget har jeg brugt hos Netto?")
+    ph.locator(".hm-send").click()
+    wait_until(ph, lambda: "Fra din Økonomi" in ph.locator(".hm-alf").last.inner_text(), timeout_ms=30000)
+    alf = ph.locator(".hm-alf").last.inner_text()
+    check("Alf counts in the admin's own Økonomi", "Fra din Økonomi" in alf and "netto" in alf.lower()
+          and "posteringer" in alf, alf[:300])
+    ph.screenshot(path=f"{OUT}/13c-alf-money.png", full_page=True)
 
     # ---- mor: her own Økonomi (0.3.3), and her Cyklus ------------------------------------------
     admin_count = ph.request.get(BASE + "/api/okonomi/state").json()["count"]

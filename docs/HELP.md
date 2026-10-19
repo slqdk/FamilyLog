@@ -33,7 +33,7 @@ FamilyMap is shown to the administrator only.
 title: Front page
 where: Top bar
 since: 0.2.0
-changed: 0.3.11
+changed: 0.3.12
 
 Opens the front page at **/** - what everyone in the family sees on the
 phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
@@ -43,7 +43,9 @@ in this admin app. On a phone, "Add to home screen" makes it an app icon.
 **Alf** (0.3.11) also answers about the family's Dagbog and Cyklus - "how
 has mum been this week?", "when is Sanne's period due?" - from exactly what
 the person asking can see in the app: the family's days, a cycle only when
-she shares it with them and only what she shares. Nothing from Økonomi.
+she shares it with them and only what she shares. Since 0.3.12 he answers
+about money too ("how much did I spend on groceries this year?") - counted
+exactly in the asker's own Økonomi, never anyone else's.
 
 **Økonomi** on the front page is each person's own (0.3.3): one month at a
 time (what went out, per category against a normal month, the biggest

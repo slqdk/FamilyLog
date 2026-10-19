@@ -11,7 +11,7 @@ const EXAMPLES = [
   'Find en legeplads i nærheden',
   'Hvordan har familien haft det i denne uge?',
   'Giv mig en nem aftensmad til fire',
-  'Hjælp mig med at forklare brøker til en 10-årig',
+  'Hvad har jeg brugt på dagligvarer i år?',
 ];
 
 /** Alf: a conversation per person. Places come back as links into Alf's
@@ -88,7 +88,8 @@ export function Chat({ me, resetKey }: { me: FmUser; resetKey: number }) {
         {messages.map((m) => m.role === 'user'
           ? <div key={m.id} className="hm-msg hm-me">{m.content}</div>
           : <AlfMessage key={m.id} text={m.content} places={m.places} searched={m.meta.searched ?? null}
-                        family={m.meta.route === 'family'} />)}
+                        family={m.meta.route === 'family'}
+                        money={m.meta.route === 'money' && m.meta.counted ? m.meta : null} />)}
         {showJob && <Working job={job} />}
         {error && <p className="fm-error">{error}</p>}
         <div ref={endRef} />
@@ -130,8 +131,9 @@ function Working({ job }: { job: ChatJob }) {
   );
 }
 
-function AlfMessage({ text, places, searched, family }: {
+function AlfMessage({ text, places, searched, family, money }: {
   text: string; places: PlaceCard[]; searched: string | null; family?: boolean;
+  money?: { counted?: string; matched?: number } | null;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -140,6 +142,11 @@ function AlfMessage({ text, places, searched, family }: {
       {family && (
         // 0.3.11: answered from the Dagbog and Cyklus - what the asker can see in the app.
         <p className="hm-source">{searched ? `Fra Dagbog og Cyklus: ${searched}` : 'Fra Dagbog og Cyklus'}</p>
+      )}
+      {money && (
+        // 0.3.12: counted in the asker's own Økonomi - what was counted, and the way to the rows.
+        <p className="hm-source">Fra din Økonomi · {money.counted}{money.matched != null ? ` · ${money.matched} posteringer` : ''}
+          {' · '}<a href="#/okonomi">Åbn Økonomi</a></p>
       )}
       {places.length > 0 && (
         <>

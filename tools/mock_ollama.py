@@ -130,7 +130,13 @@ def _answer_for(model: str, messages: list[dict], fmt) -> tuple[str, str]:
         family = any(w in low for w in ("haft det", "har det", "hvordan har", "humør", "dagbog", "cyklus", "menstruation"))
         m = re.search(r"\b(?:har|til|om|får|med)\s+(\w+?)s?\b(?:\s|\?|$)", msg)
         person = m.group(1) if family and m else None
-        return think, json.dumps({"places": places, "family": family, "person": person, "question": msg})
+        # 0.3.12: one's own Økonomi - "Hvor meget har jeg brugt hos Davidsens?"
+        money = not family and any(w in low for w in ("brugt", "penge", "økonomi", "forbrug", "kostet", "og i 20"))
+        if money and not person:
+            m2 = re.search(r"\bhar\s+([A-ZÆØÅ]\w+?)s?\s+brugt", msg)
+            person = m2.group(1) if m2 else None
+        return think, json.dumps({"places": places and not money, "family": family, "money": money,
+                                  "person": person, "question": msg})
     if "fra familiens Dagbog og Cyklus" in system:
         heads = [ln[3:] for ln in last.splitlines() if ln.startswith("## ")]
         facts = [ln for ln in last.splitlines() if ln.startswith(("- ", "Cyklus", "Hun deler"))]
