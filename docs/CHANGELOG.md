@@ -2,6 +2,15 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.13 - 2026-10-19
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- Alf's tables show as tables on the front page (they came out as `|` and
+  `:---`), and bold and lists as such - every answer that is not about
+  places (Økonomi, the family, anything else) is Markdown now. A wide table
+  scrolls sideways inside the answer; amounts do not wrap.
+
 ## 0.3.12 - 2026-10-19
 
 Alf answers about money.

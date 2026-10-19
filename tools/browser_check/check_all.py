@@ -419,6 +419,10 @@ with sync_playwright() as p:
     alf = ph.locator(".hm-alf").last.inner_text()
     check("Alf counts in the admin's own Økonomi", "Fra din Økonomi" in alf and "netto" in alf.lower()
           and "posteringer" in alf, alf[:300])
+    check("Alf's Markdown table shows as a table (0.3.13)",
+          ph.locator(".hm-alf").last.locator("table tr").count() >= 2 and "| :---" not in alf, alf[:300])
+    sw = ph.evaluate("document.documentElement.scrollWidth")
+    check("Alf's table fits the phone", sw <= 390, f"scrollWidth {sw}")
     ph.screenshot(path=f"{OUT}/13c-alf-money.png", full_page=True)
 
     # ---- mor: her own Økonomi (0.3.3), and her Cyklus ------------------------------------------

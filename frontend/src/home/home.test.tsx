@@ -151,11 +151,16 @@ describe('Alf on the front page', () => {
   it('says what was counted when the answer is from your Økonomi (0.3.12)', async () => {
     vi.spyOn(homeApi, 'chat').mockResolvedValue({ model: true, job: null, messages: [
       { id: 1, role: 'user', content: 'Hvad har jeg brugt hos Netto?', places: [], createdAt: '', meta: {} },
-      { id: 2, role: 'assistant', content: 'Du har brugt 1.200 kr hos Netto.', places: [], createdAt: '',
+      { id: 2, role: 'assistant', places: [], createdAt: '',
+        content: 'Du har brugt **1.200 kr** hos Netto.\n\n| Dato | Beløb |\n| :--- | :--- |\n| 2026-04-07 | -279,95 kr |',
         meta: { route: 'money', counted: 'money out at netto', matched: 9 } }] });
     render(<Chat me={{ id: 1, username: 'mor', role: 'family' }} resetKey={0} />);
     expect(await screen.findByText(/Fra din Økonomi · money out at netto · 9 posteringer/)).toBeInTheDocument();
     expect(screen.getByText('Åbn Økonomi')).toHaveAttribute('href', '#/okonomi');
+    // 0.3.13: Alf's Markdown shows as a table and bold, not as | and **.
+    expect(screen.getByRole('table')).toHaveTextContent('-279,95 kr');
+    expect(screen.getByText('1.200 kr').tagName).toBe('STRONG');
+    expect(screen.queryByText(/\|/)).toBeNull();
   });
 
   it('sends a message from an example and says when there is no model', async () => {

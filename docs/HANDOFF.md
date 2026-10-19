@@ -5,6 +5,15 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.13 - Start here
+
+Chat.tsx `AnswerText`: no places -> `core/Markdown` (GFM, inside `.hm-md`);
+with places the old `parseAnswer` paragraphs with [[id]] pins. The mock's
+Økonomi answer now ends with a small Markdown table, and the browser check
+asserts it renders as `<table>`.
+
+---
+
 ## 0.3.12 - Start here
 
 Alf's fourth route, `money` (route JSON `money`; at most one of places /

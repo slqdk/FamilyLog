@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Markdown } from '../core/Markdown';
 import { AlfAnimation, asPhase } from '../sections/familymap/phone/anim';
 import { categoryArt } from '../sections/familymap/phone/art';
 import { parseAnswer } from '../sections/familymap/phone/logic';
@@ -125,7 +126,7 @@ function Working({ job }: { job: ChatJob }) {
     <div className="hm-msg hm-alf">
       {!(job.phase === 'write' && job.text) && <AlfAnimation phase={asPhase(job.phase, job.state)} />}
       {job.text
-        ? <AnswerText text={job.text} places={job.places} />
+        ? <AnswerText text={job.text} places={job.places} streaming />
         : <p className="fm-ask-step">{job.state === 'queued' && job.ahead ? `Venter - ${job.ahead} foran i køen…` : job.step}</p>}
     </div>
   );
@@ -167,8 +168,11 @@ function AlfMessage({ text, places, searched, family, money }: {
 }
 
 /** Alf's text, with [[id]] as a pin linking the place in Alf's Atlas. */
-function AnswerText({ text, places }: { text: string; places: PlaceCard[] }) {
+function AnswerText({ text, places, streaming = false }: { text: string; places: PlaceCard[]; streaming?: boolean }) {
   const known = useMemo(() => new Map(places.map((p) => [p.id, p])), [places]);
+  // 0.3.13: an answer without places (Økonomi, the family, anything else) is
+  // Markdown - Alf's tables, lists and bold show as such, not as | and **.
+  if (places.length === 0) return <div className="hm-md"><Markdown text={text} streaming={streaming} /></div>;
   const paras = parseAnswer(text, new Set(known.keys()));
   return (
     <>

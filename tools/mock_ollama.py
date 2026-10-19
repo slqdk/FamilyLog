@@ -104,6 +104,13 @@ def _answer_for(model: str, messages: list[dict], fmt) -> tuple[str, str]:
         return think, json.dumps(_ledger_spec(last))
     if "You answer questions about the person's own bank transactions" in system:
         m = re.search(r"^Result: (.*)$", last, re.M)
+        rows = re.findall(r"^- (\d{4}-\d{2}-\d{2}) \| ([^|]+) \| ([^|]+) \|", last, re.M)[:2]
+        table = ("\n\n| Dato | Navn | Beløb |\n| :--- | :--- | :--- |\n"
+                 + "\n".join(f"| {d} | {n.strip()} | {a.strip()} |" for d, n, a in rows)) if rows else ""
+        if table:                    # a Markdown table, as a real model writes one (FamilyLog 0.3.13)
+            return think, ("From the ledger: " + (m.group(1) if m else "nothing matched.")
+                           + ("\n\nOwn transfers were left out." if "Own transfers left out" in last else "")
+                           + table)
         return think, ("From the ledger: " + (m.group(1) if m else "nothing matched.")
                        + "\n\nOwn transfers were left out." if "Own transfers left out" in last
                        else "From the ledger: " + (m.group(1) if m else "nothing matched."))
