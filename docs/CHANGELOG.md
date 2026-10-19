@@ -2,6 +2,28 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.11 - 2026-10-19
+
+Alf knows the family's Dagbog and Cyklus; every day's text and photo shared.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`. Then give each
+account the **name** the family uses (Settings → Accounts, e.g. "Sanne" for
+her account) so Alf knows who is meant. Tell the family that the text and
+photos of the days written before 0.3.9 are now shared too.
+
+- **Alf answers about the family**: "Hvordan har mor haft det i denne uge?",
+  "Hvornår får Sanne menstruation?", "Hvor meget har jeg motioneret?". He
+  answers from exactly what the person asking can see in the app: the
+  family's days (a family account and the administrator; a user account only
+  its own), a cycle only when she shares it with the asker and only what she
+  shares - never her cycle note. The answer says it came from the Dagbog and
+  Cyklus. Nothing from Økonomi.
+- **A name per account** (Settings → Accounts) - what the family calls the
+  person. Alf matches it, the first name or the username.
+- **The old days are shared**: the text and photos of days written before
+  0.3.9 are now seen by the family too. A day its author has saved as
+  private since 0.3.9 stays private.
+
 ## 0.3.10 - 2026-10-19
 
 Dagbog statistics, corrected.

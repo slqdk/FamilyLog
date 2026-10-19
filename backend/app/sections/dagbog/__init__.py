@@ -127,6 +127,15 @@ def _m005_shared(con: sqlite3.Connection) -> None:
                         (json.dumps(foods, ensure_ascii=False),))
 
 
+def _m006_share_old_days(con: sqlite3.Connection) -> None:
+    """0.3.11 (Søren): "the days people have written in shall also show text
+    and photos to the others" - the days migration 5 kept private are shared.
+    A day its author has saved since 0.3.9 keeps the choice made then."""
+    r = con.execute("SELECT applied_at FROM schema_migrations WHERE section = 'dagbog' AND version = 5").fetchone()
+    if r is not None:
+        con.execute("UPDATE dagbog_entries SET shared = 1 WHERE shared = 0 AND updated_at <= ?", (r[0],))
+
+
 SECTION = Section(
     id="dagbog",
     title="Dagbog",
@@ -135,7 +144,8 @@ SECTION = Section(
                 (2, "food categories", _m002_foods),
                 (3, "mental readiness 1-10, childcare activity", _m003_mental_ten),
                 (4, "motion, sodavand, sickness", _m004_more_fields),
-                (5, "text and photo shared with the family", _m005_shared)],
+                (5, "text and photo shared with the family", _m005_shared),
+                (6, "the old days shared too", _m006_share_old_days)],
     family_prefixes=("/api/dagbog/",),
     on_user_deleted=dagbog.forget_user,
 )

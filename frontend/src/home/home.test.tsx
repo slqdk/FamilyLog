@@ -138,6 +138,16 @@ describe('Alf on the front page', () => {
     expect(screen.queryByText(/\*\*/)).toBeNull();
   });
 
+  it('says when an answer comes from the Dagbog and Cyklus (0.3.11)', async () => {
+    vi.spyOn(homeApi, 'chat').mockResolvedValue({ model: true, job: null, messages: [
+      { id: 1, role: 'user', content: 'Hvordan har Sanne det?', places: [], createdAt: '', meta: {} },
+      { id: 2, role: 'assistant', content: 'Sanne har haft en god uge.', places: [], createdAt: '',
+        meta: { route: 'family', searched: 'Sanne' } }] });
+    render(<Chat me={{ id: 1, username: 'mor', role: 'family' }} resetKey={0} />);
+    expect(await screen.findByText('Fra Dagbog og Cyklus: Sanne')).toBeInTheDocument();
+    expect(screen.queryByText(/Vis .* steder/)).toBeNull();
+  });
+
   it('sends a message from an example and says when there is no model', async () => {
     vi.spyOn(homeApi, 'chat').mockResolvedValue({ model: false, job: null, messages: [] });
     const send = vi.spyOn(homeApi, 'chatSend').mockResolvedValue({

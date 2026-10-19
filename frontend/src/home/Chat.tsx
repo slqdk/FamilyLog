@@ -9,6 +9,7 @@ import { hello } from './logic';
 const EXAMPLES = [
   'Hvad skal vi lave i weekenden?',
   'Find en legeplads i nærheden',
+  'Hvordan har familien haft det i denne uge?',
   'Giv mig en nem aftensmad til fire',
   'Hjælp mig med at forklare brøker til en 10-årig',
 ];
@@ -86,7 +87,8 @@ export function Chat({ me, resetKey }: { me: FmUser; resetKey: number }) {
         )}
         {messages.map((m) => m.role === 'user'
           ? <div key={m.id} className="hm-msg hm-me">{m.content}</div>
-          : <AlfMessage key={m.id} text={m.content} places={m.places} searched={m.meta.searched ?? null} />)}
+          : <AlfMessage key={m.id} text={m.content} places={m.places} searched={m.meta.searched ?? null}
+                        family={m.meta.route === 'family'} />)}
         {showJob && <Working job={job} />}
         {error && <p className="fm-error">{error}</p>}
         <div ref={endRef} />
@@ -128,11 +130,17 @@ function Working({ job }: { job: ChatJob }) {
   );
 }
 
-function AlfMessage({ text, places, searched }: { text: string; places: PlaceCard[]; searched: string | null }) {
+function AlfMessage({ text, places, searched, family }: {
+  text: string; places: PlaceCard[]; searched: string | null; family?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <div className="hm-msg hm-alf">
       <AnswerText text={text} places={places} />
+      {family && (
+        // 0.3.11: answered from the Dagbog and Cyklus - what the asker can see in the app.
+        <p className="hm-source">{searched ? `Fra Dagbog og Cyklus: ${searched}` : 'Fra Dagbog og Cyklus'}</p>
+      )}
       {places.length > 0 && (
         <>
           <button className="fm-link hm-more" onClick={() => setOpen(!open)}>

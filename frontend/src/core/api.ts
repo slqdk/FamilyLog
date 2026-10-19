@@ -46,6 +46,8 @@ export const api = {
   signOut: (id: number) => fetch(`/api/users/${id}/sign-out`, { method: 'POST' }).then(json<{ ok: boolean }>),
   setGender: (id: number, gender: string) =>
     fetch(`/api/users/${id}`, send('PATCH', { gender })).then(json<UserDto>),
+  setName: (id: number, name: string) =>
+    fetch(`/api/users/${id}`, send('PATCH', { name })).then(json<UserDto>),
   /** 0.3.3: family accounts with their own Økonomi (the ledger section's). */
   economyAccess: () => fetch('/api/ledger/access').then(json<number[]>),
   setEconomyAccess: (userId: number, on: boolean) =>

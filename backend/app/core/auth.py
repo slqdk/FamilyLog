@@ -91,6 +91,7 @@ def user_dto(r) -> dict:
     keys = r.keys()
     return {"id": r["id"], "username": r["username"], "role": r["role"],
             "gender": (r["gender"] or "") if "gender" in keys else "",
+            "name": (r["name"] or "") if "name" in keys else "",
             "createdAt": r["created_at"]}
 
 
@@ -160,6 +161,22 @@ def set_gender(uid: int, gender: str) -> dict:
         raise ValueError("Gender must be female, male or empty.")
     with db.connect() as con:
         con.execute("UPDATE users SET gender=? WHERE id=?", (gender, uid))
+        r = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if r is None:
+        raise LookupError("No such account.")
+    return user_dto(r)
+
+
+MAX_NAME = 40
+
+
+def set_name(uid: int, name: str) -> dict:
+    """What the family calls the person (0.3.11) - empty for none."""
+    name = " ".join((name or "").split())
+    if len(name) > MAX_NAME:
+        raise ValueError(f"The name is too long (at most {MAX_NAME} characters).")
+    with db.connect() as con:
+        con.execute("UPDATE users SET name=? WHERE id=?", (name, uid))
         r = con.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
     if r is None:
         raise LookupError("No such account.")

@@ -311,13 +311,20 @@ function AccountsGroup({ meId }: { meId: number }) {
     <Group title="Accounts" help="settings.accounts">
       <p className="settings-note">Family accounts use the front page (/) and Alf's Atlas only and do not count
         towards the account limit. Everyone with Økonomi has their own data; a family account gets it when you turn it on here.
-        Accounts set to female get Cyklus; what she shares, she decides herself.</p>
+        Accounts set to female get Cyklus; what she shares, she decides herself. A name (what the family calls
+        the person) lets Alf know who is meant.</p>
       <ul className="user-list">
         {users.map((u) => (
           <li key={u.id}>
             <span className={`user-dot${u.online ? ' on' : ''}`} title={u.online ? 'Signed in' : 'Not signed in'} />
             <span className="user-name">{u.username}</span>
             <span className="user-role">{u.role}{u.id === meId ? ' (you)' : ''}</span>
+            <input className="fma-inline user-alias" aria-label={`Name of ${u.username}`} placeholder="name (e.g. Sanne)"
+                   maxLength={40} defaultValue={u.name ?? ''} key={`${u.id}-${u.name ?? ''}`}
+                   title="What the family calls this person - Alf knows them by it"
+                   onBlur={(e) => { if (e.target.value.trim() !== (u.name ?? ''))
+                     void run(() => api.setName(u.id, e.target.value), `${u.username} updated.`); }}
+                   onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
             <select className="user-pick" aria-label={`Gender of ${u.username}`} value={u.gender ?? ''}
                     title="Accounts set to female get Cyklus on the front page"
                     onChange={(e) => void run(() => api.setGender(u.id, e.target.value), `${u.username} updated.`)}>

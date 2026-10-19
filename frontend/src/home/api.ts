@@ -32,7 +32,7 @@ export interface ChatMessage {
 export interface ChatJob {
   state: 'queued' | 'working' | 'done' | 'failed' | 'stopped';
   step: string; phase: string; text: string; places: PlaceCard[]; error: string | null;
-  route: 'places' | 'chat' | null; searched: string | null; where: string | null; ahead?: number;
+  route: 'places' | 'family' | 'chat' | null; searched: string | null; where: string | null; ahead?: number;
 }
 export interface ChatState { messages: ChatMessage[]; job: ChatJob | null; model: boolean }
 

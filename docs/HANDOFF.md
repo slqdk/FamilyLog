@@ -5,6 +5,22 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.11 - Start here
+
+Alf's third route, `family` (`sections/chat/family.py`): the route JSON has
+`family` + `person`; `family.gather(asker, person)` builds the context only
+from what the asker can see - `dagbog.person_days`/`stats` (through
+`_may_see`) and `cyklus.shared_with` cards (her own `status`/`forecast` when
+she asks about herself; her note never). `match()` takes the account's
+`name` (core migration 3, `PATCH /api/users/{id} {name}`), a word of it, the
+username or "mig". The answer's meta is `{route: "family", searched: names}`;
+Chat.tsx shows "Fra Dagbog og Cyklus: …". Dagbog migration 6 sets
+`shared = 1` on rows still private with `updated_at` <= migration 5's
+`applied_at` (rows re-saved since keep their choice). The mock routes
+"haft det / humør / dagbog / cyklus / menstruation" questions to family.
+
+---
+
 ## 0.3.10 - Start here
 
 `dagbog.stats`: `coverage` = days / span, span from max(period start, the

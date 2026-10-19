@@ -165,6 +165,7 @@ class CreateUserBody(BaseModel):
 
 class UserPatch(BaseModel):
     gender: str | None = None
+    name: str | None = None
 
 
 @app.post("/api/users")
@@ -188,16 +189,19 @@ def create_user(body: CreateUserBody, request: Request):
 @app.patch("/api/users/{uid}")
 def update_user(uid: int, body: UserPatch, request: Request):
     """The administrator sets an account's gender (0.3.0: the cycle section
-    is for accounts set to female)."""
+    is for accounts set to female) and name (0.3.11: what the family calls
+    the person, for Alf)."""
     require_admin(request)
     if auth.get_user(uid) is None:
         raise HTTPException(404, "No such account.")
     out = auth.get_user(uid)
-    if body.gender is not None:
-        try:
+    try:
+        if body.gender is not None:
             out = auth.set_gender(uid, body.gender)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc))
+        if body.name is not None:
+            out = auth.set_name(uid, body.name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return out
 
 

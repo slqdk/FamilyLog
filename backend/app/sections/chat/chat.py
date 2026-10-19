@@ -12,11 +12,14 @@ job in the model queue:
 2. **Places** - Spørg Alf's own search (familymap_ask.gather: the family's
    reviews first, the wishlist, other places, the web when too few fit),
    then Alf answers from that list only, linking places as [[id]].
-3. **Anything else** - Alf answers as a friendly general assistant, with the
+3. **The family** (0.3.11) - a question about someone's Dagbog or Cyklus
+   (or one's own): Alf answers from what the person asking can see in the
+   app themselves - see family.py.
+4. **Anything else** - Alf answers as a friendly general assistant, with the
    conversation so far.
 
-Only the person's own messages are ever sent; nothing from Økonomi or the
-Dagbog is shared with the model.
+Nothing from Økonomi is sent to the model; from the Dagbog and Cyklus only
+what the person asking can see, and only when the question is about it.
 """
 from __future__ import annotations
 
@@ -28,24 +31,33 @@ from datetime import date
 from app.core import db, jobqueue, logs, ollama, settings
 
 from ..familymap import familymap as fm, familymap_ask as fm_ask
+from . import family
 
 MAX_MESSAGE = 1000
 HISTORY_TURNS = 8            # messages of context sent with a new one
 QUEUE_BASE = 5_000_000       # queue keys -(QUEUE_BASE + user id): never another's
 
 ROUTE_PROMPT = """Afgør hvad familiemedlemmets SIDSTE besked handler om. Svar KUN med JSON:
-{"places": true/false, "question": "beskeden omskrevet så den kan forstås alene"}
+{"places": true/false, "family": true/false, "person": "navnet der spørges om, eller null",
+ "question": "beskeden omskrevet så den kan forstås alene"}
 
 - places = true når der spørges efter konkrete steder at tage hen: spisesteder, caféer, is,
   legepladser, udflugter, aktiviteter, svømmehaller, museer, natur, strande, overnatning, byer.
-- places = false for alt andet: viden, opskrifter, lektier, planlægning, hverdagsspørgsmål, sjov.
+- family = true når der spørges til hvordan en i familien (eller en selv) har det eller har haft det,
+  ud fra familiens Dagbog eller Cyklus: humør, overskud, motion, alkohol, sodavand, mad, sygdom,
+  hvad de har lavet, dagens tekst, statistik - eller menstruation, cyklus, menstruationen, frugtbare dage,
+  ægløsning, PMS, humør/adfærd i cyklussen.
+- person: navnet på den der spørges om, som skrevet ("Sanne", "mor"); "mig" når de spørger om sig selv;
+  null når det er hele familien eller uklart. Brug samtalen ("hvad med i går?" handler om samme person).
+- places og family er false for alt andet: viden, opskrifter, lektier, planlægning, sjov.
 - question: brug samtalen til at gøre beskeden fuldstændig ("og i Flensborg?" bliver
   "pizza i Flensborg"). Samme sprog som beskeden."""
 
 GENERAL_PROMPT = """Du er Alf, en venlig hjælper i familiens app FamilyLog. Familien bor i Sønderjylland.
 I dag er det %(today)s. Du taler med %(name)s.
 - Svar på det sprog der skrives på (normalt dansk), kort og klart; brug lister når det hjælper.
-- Du kender ikke familiens private oplysninger, og du kan ikke se internettet her.
+- Du kan ikke se internettet her. Spørges der til familiens Dagbog eller Cyklus, kan de spørge direkte,
+  fx "hvordan har mor haft det i denne uge?" eller "hvornår får Sanne menstruation?".
 - Bliver du spurgt om steder at tage hen, så sig at de kan spørge "find en legeplads i Vojens"
   eller lignende, så søger du i familiens egne steder.
 - Er du i tvivl, så sig det ærligt."""
@@ -184,17 +196,21 @@ async def _ask_json(model: str, system: str, user: str) -> dict:
 
 
 async def route(model: str, history: list[dict], text: str) -> dict:
-    """{"places": bool, "question": str}. A broken answer means "not places,
-    as written" - the general answer can still help."""
+    """{"places": bool, "family": bool, "person": str | None, "question": str}.
+    A broken answer means "neither, as written" - the general answer can still help."""
     convo = _transcript(history)
     prompt = (f"Samtalen indtil nu:\n{convo}\n\n" if convo else "") + f"Sidste besked: {text}"
     try:
         out = await _ask_json(model, ROUTE_PROMPT, prompt)
     except Exception as exc:                                  # noqa: BLE001
         logs.record_exception(exc, "Alf chat route")
-        return {"places": False, "question": text}
+        return {"places": False, "family": False, "person": None, "question": text}
     question = " ".join(str(out.get("question") or "").split())[:MAX_MESSAGE] or text
-    return {"places": bool(out.get("places")), "question": question}
+    person = out.get("person")
+    person = " ".join(str(person).split())[:60] if isinstance(person, str) and person.strip() else None
+    places = bool(out.get("places"))
+    return {"places": places, "family": bool(out.get("family")) and not places, "person": person,
+            "question": question}
 
 
 async def run(user: dict, text: str, history: list[dict], phone: tuple[float, float] | None,
@@ -210,8 +226,20 @@ async def run(user: dict, text: str, history: list[dict], phone: tuple[float, fl
     try:
         step("Forstår beskeden…", "understand")
         r = await route(model, history, text)
-        j["route"] = "places" if r["places"] else "chat"
-        if r["places"]:
+        j["route"] = "places" if r["places"] else "family" if r["family"] else "chat"
+        if r["family"]:
+            step("Kigger i Dagbog og Cyklus…", "search")
+            found = family.gather(user, r["person"])
+            j["searched"] = ", ".join(found["people"]) or None
+            step("Skriver svaret…", "write")
+            j["text"] = ""
+            today = date.today()
+            system = family.ANSWER_PROMPT % {"today": f"{DAYS[today.weekday()]} {today:%d.%m.%Y}",
+                                             "name": user["username"]}
+            msgs = [{"role": "system", "content": system}]
+            msgs += [{"role": m["role"], "content": m["content"]} for m in history[-4:]]
+            msgs.append({"role": "user", "content": f"{found['context']}\n\nSpørgsmål: {r['question']}"})
+        elif r["places"]:
             found = await fm_ask.gather(uid, r["question"], phone, None, j, model, step)
             if found is None:
                 # No town and no position: the search says so itself.
@@ -240,6 +268,8 @@ async def run(user: dict, text: str, history: list[dict], phone: tuple[float, fl
                 j["step"], j["phase"] = "Skriver svaret…", "write"
             j["text"] += piece
         meta = {"route": j["route"]}
+        if j["route"] == "family":
+            meta["searched"] = j.get("searched")
         if j["route"] == "places":
             meta.update(searched=j.get("searched"), where=j.get("where"))
         add_message(uid, "assistant", j["text"].strip(), j["places"], meta)

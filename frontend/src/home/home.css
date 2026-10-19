@@ -45,6 +45,7 @@
 .hm-p { margin: 0 0 8px; white-space: pre-wrap; }
 .hm-p:last-of-type { margin-bottom: 0; }
 .hm-more { font-size: 14px; }
+.hm-source { margin: 6px 0 0; font-size: 13px; font-weight: 700; color: var(--fm-dim); }
 .hm-places { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
 .hm-place { text-decoration: none; color: inherit; box-shadow: none; border: 1.5px solid var(--fm-line); }
 .hm-place .fm-card-pic { width: 56px; height: 56px; border-radius: 12px; }

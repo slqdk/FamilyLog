@@ -397,6 +397,21 @@ with sync_playwright() as p:
     check("Accounts sets gender and Økonomi access",
           row.locator("select[aria-label='Gender of mor']").input_value() == "female")
     page.screenshot(path=f"{OUT}/13-accounts.png", full_page=True)
+    # 0.3.11: a name the family uses - and Alf answers about her from what the asker can see.
+    name_box = row.locator("input[aria-label='Name of mor']")
+    name_box.fill("Mette")
+    name_box.press("Enter")
+    wait_until(page, lambda: any(u.get("name") == "Mette" for u in page.request.get(BASE + "/api/users").json()))
+    check("Accounts sets a name", any(u.get("name") == "Mette" for u in page.request.get(BASE + "/api/users").json()))
+    ph.goto(BASE + "/")
+    ph.wait_for_selector(".hm-composer textarea")
+    ph.locator(".hm-composer textarea").fill("Hvordan har Mette det?")
+    ph.locator(".hm-send").click()
+    wait_until(ph, lambda: ph.locator(".hm-alf .hm-source").count() > 0, timeout_ms=30000)
+    alf = ph.locator(".hm-alf").last.inner_text()
+    check("Alf answers about Mette from the Dagbog", "Fra Dagbog og Cyklus: Mette" in alf
+          and "Delt dagbogstekst" in alf, alf[:300])
+    ph.screenshot(path=f"{OUT}/13b-alf-family.png", full_page=True)
 
     # ---- mor: her own Økonomi (0.3.3), and her Cyklus ------------------------------------------
     admin_count = ph.request.get(BASE + "/api/okonomi/state").json()["count"]

@@ -54,9 +54,16 @@ def _c002_gender(con: sqlite3.Connection) -> None:
     add_column(con, "users", "gender", "TEXT NOT NULL DEFAULT ''")
 
 
+def _c003_name(con: sqlite3.Connection) -> None:
+    """0.3.11: a name per account - what the family calls the person ("Sanne"
+    for the account NygaardP), so Alf knows who is meant."""
+    add_column(con, "users", "name", "TEXT NOT NULL DEFAULT ''")
+
+
 CORE: list[tuple[int, str, callable]] = [
     (1, "users and sessions", _c001_auth),
     (2, "gender per account", _c002_gender),
+    (3, "a name per account", _c003_name),
 ]
 
 

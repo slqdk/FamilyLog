@@ -126,7 +126,15 @@ def _answer_for(model: str, messages: list[dict], fmt) -> tuple[str, str]:
                                         "udflugt", "museum", "strand", "svømmehal"))
         if "og i " in low and "Samtalen indtil nu" in last:      # a follow-up
             places = True
-        return think, json.dumps({"places": places, "question": msg})
+        # 0.3.11: the family's Dagbog and Cyklus - "Hvordan har Mette det?", "Sannes cyklus"
+        family = any(w in low for w in ("haft det", "har det", "hvordan har", "humør", "dagbog", "cyklus", "menstruation"))
+        m = re.search(r"\b(?:har|til|om|får|med)\s+(\w+?)s?\b(?:\s|\?|$)", msg)
+        person = m.group(1) if family and m else None
+        return think, json.dumps({"places": places, "family": family, "person": person, "question": msg})
+    if "fra familiens Dagbog og Cyklus" in system:
+        heads = [ln[3:] for ln in last.splitlines() if ln.startswith("## ")]
+        facts = [ln for ln in last.splitlines() if ln.startswith(("- ", "Cyklus", "Hun deler"))]
+        return think, "Alf om familien: " + " | ".join(heads + facts[:6])
     if system.startswith("Du er Alf, en venlig hjælper"):
         n = sum(1 for m in messages if m.get("role") == "user")
         return think, f"Hej! Det er Alf. Du skrev: \"{last[:80]}\" ({n} beskeder i samtalen)."

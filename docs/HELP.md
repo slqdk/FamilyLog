@@ -33,12 +33,17 @@ FamilyMap is shown to the administrator only.
 title: Front page
 where: Top bar
 since: 0.2.0
-changed: 0.3.5
+changed: 0.3.11
 
 Opens the front page at **/** - what everyone in the family sees on the
 phone: Alf to talk to, and tiles for Alf's Atlas, the Dagbog, Økonomi and
 Cyklus. Family accounts land there when they sign in and can reach nothing
 in this admin app. On a phone, "Add to home screen" makes it an app icon.
+
+**Alf** (0.3.11) also answers about the family's Dagbog and Cyklus - "how
+has mum been this week?", "when is Sanne's period due?" - from exactly what
+the person asking can see in the app: the family's days, a cycle only when
+she shares it with them and only what she shares. Nothing from Økonomi.
 
 **Økonomi** on the front page is each person's own (0.3.3): one month at a
 time (what went out, per category against a normal month, the biggest
@@ -180,7 +185,7 @@ exports. The container's `APP_TIMEZONE` pins it.
 title: Accounts
 where: Settings
 since: 0.1.0
-changed: 0.3.3
+changed: 0.3.11
 
 Everyone who can sign in. **user** accounts use the app (each has their own
 Økonomi); at most 3 accounts in all for administrator and users. **family**
@@ -188,6 +193,8 @@ accounts use the front page and Alf's Atlas only and do not count towards
 the limit (FamilyMap → Family accounts lists them too).
 
 **gender**: an account set to *female* gets Cyklus on the front page.
+**name**: what the family calls the person ("Sanne") - Alf knows them by it
+when asked about their Dagbog or Cyklus.
 **Økonomi** (family accounts only): *own data* gives that person their own
 Økonomi on the front page - their own bank exports, categories and Alf
 answers, seen by nobody else. Turning it off hides it (the data stays for

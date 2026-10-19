@@ -1,7 +1,7 @@
 /** Shared DTOs of the shell (the sections keep theirs next to their views). */
 
 export type Gender = '' | 'female' | 'male';
-export interface AuthUser { id: number; username: string; role: 'admin' | 'user' | 'family'; gender?: Gender; createdAt?: string }
+export interface AuthUser { id: number; username: string; role: 'admin' | 'user' | 'family'; gender?: Gender; name?: string; createdAt?: string }
 export interface AuthStatus { needsSetup: boolean; user: AuthUser | null }
 export interface Meta { name: string; version: string }
 
