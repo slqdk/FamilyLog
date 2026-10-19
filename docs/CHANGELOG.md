@@ -2,6 +2,19 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.3.10 - 2026-10-19
+
+Dagbog statistics, corrected.
+
+**ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.
+
+- **Dage skrevet** counts from the person's first day when they began after
+  the period's start: two days written of two is 100%, not 7% of 30.
+- **Motion, alkohol and sodavand** are shown as a total ("9 t i alt på 2
+  dage") until there are 7 days with them filled in; only then as a week's
+  average. Two days, one of them 8 hours, were shown as 31,5 t a week.
+- A field never filled in in the period shows "–", not 0.
+
 ## 0.3.9 - 2026-10-18
 
 Dagbog → Familien, person by person.

@@ -265,7 +265,8 @@ describe('Dagbog → Familien (0.3.9)', () => {
     vi.spyOn(homeApi, 'family').mockResolvedValue({ from: today, to: today, members: MEMBERS, entries: [] });
     const s: DagbogStats = { person: { id: 2, username: 'mor' }, from: null, to: null, days: 28,
       fields: ['mood', 'mental', 'exercise', 'tags', 'foods'], span: 28, coverage: 100, mood: 3.5, mental: 6,
-      exerciseHoursPerWeek: 3.5, alcoholPerWeek: 7, sodaPerWeek: 0, sickDays: 0, bestStreak: 28,
+      amounts: { exercise: { total: 840, days: 28, perDay: 30, perWeek: 210 }, alcohol: null,
+                 soda: { total: 5, days: 2, perDay: 2.5, perWeek: null } }, sickDays: 0, bestStreak: 28,
       months: [{ month: '2026-09', days: 10, mood: 3, mental: 5, exerciseHours: 4, alcohol: 2 },
                { month: '2026-10', days: 18, mood: 4, mental: 7, exerciseHours: 8, alcohol: 0 }],
       weekdays: [4, 3, null, 3, 5, 4, 4], topTags: [{ name: 'Sport', days: 14 }], topFoods: [{ name: 'Vitaminer', days: 28 }],
@@ -274,7 +275,8 @@ describe('Dagbog → Familien (0.3.9)', () => {
     render(<FamilyPage me={ME} person={2} stats />);
     expect(await screen.findByText('Det følger med humøret')).toBeInTheDocument();
     expect(screen.getByText('Humør 5,0 med, 2,0 uden')).toBeInTheDocument();
-    expect(screen.getByText('3,5 t')).toBeInTheDocument();
+    expect(screen.getByText('3½ t')).toBeInTheDocument();                       // 7 days or more: a week
+    expect(screen.getByText('om ugen i snit')).toBeInTheDocument();
     expect(screen.queryByText('Alkohol')).toBeNull();                           // not one of her fields
     expect(screen.getByText('Vitaminer')).toBeInTheDocument();
     expect(stats).toHaveBeenLastCalledWith(2, addDays(today, -29));

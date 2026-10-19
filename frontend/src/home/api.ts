@@ -58,10 +58,13 @@ export interface DagbogPerson {
   entries: DagbogEntry[]; more: boolean; firstDay: string | null; total: number;
 }
 export interface DagbogCount { name: string; days: number }
+export interface DagbogAmount { total: number; days: number; perDay: number; perWeek: number | null }
 export interface DagbogStats {
   person: { id: number; username: string }; from: string | null; to: string | null; days: number; fields: string[];
   span?: number; coverage?: number; mood?: number | null; mental?: number | null;
-  exerciseHoursPerWeek?: number; alcoholPerWeek?: number; sodaPerWeek?: number; sickDays?: number; bestStreak?: number;
+  /** over the days each was filled in; perWeek only from 7 such days (0.3.10) */
+  amounts?: Record<'exercise' | 'alcohol' | 'soda', DagbogAmount | null>;
+  sickDays?: number; bestStreak?: number;
   months?: { month: string; days: number; mood: number | null; mental: number | null; exerciseHours: number; alcohol: number }[];
   weekdays?: (number | null)[];
   topTags?: DagbogCount[]; topFoods?: DagbogCount[]; topSick?: DagbogCount[];

@@ -154,7 +154,8 @@ def test_statistics_for_one_person(client):
     s = mor.get(f"/api/dagbog/stats?user={uid}").json()
     assert s["days"] == 28 and s["coverage"] == 100 and s["bestStreak"] == 28
     assert s["mood"] == 3.5 and s["mental"] == 6.0 and s["sickDays"] == 2
-    assert s["exerciseHoursPerWeek"] == 3.5 and s["alcoholPerWeek"] == 7.0
+    assert s["amounts"]["exercise"] == {"total": 840, "days": 28, "perDay": 30, "perWeek": 210}
+    assert s["amounts"]["alcohol"]["perWeek"] == 7.0 and s["amounts"]["soda"] is None
     assert s["topFoods"][0] == {"name": "Hjemmelavet", "days": 28}
     assert {t["name"] for t in s["topTags"]} == {"Sport", "Fjernsyn"}
     assert len(s["weekdays"]) == 7 and sum(m["days"] for m in s["months"]) == 28
@@ -164,6 +165,21 @@ def test_statistics_for_one_person(client):
     week = mor.get(f"/api/dagbog/stats?user={uid}&frm={(date.today() - timedelta(days=6)).isoformat()}").json()
     assert week["days"] == 7 and week["span"] == 7
     assert client.get(f"/api/dagbog/stats?user={uid}&frm=igår").status_code == 400
+
+
+def test_two_days_are_no_week(client):
+    """0.3.10 (Søren: "only two entries for this person"): a person who began
+    two days ago has written 100% of their days, not 7% of 30; and two days
+    of motion are a total, not a week's average."""
+    barn = _login(client, "barn", "familie-kode-2")
+    uid = next(u["id"] for u in client.get("/api/users").json() if u["username"] == "barn")
+    barn.put("/api/dagbog/entry", json={"day": YESTERDAY, "mood": 4, "exercise": 480, "soda": 2})
+    barn.put("/api/dagbog/entry", json={"day": TODAY, "mood": 3, "exercise": 60, "soda": 3})
+    thirty = (date.today() - timedelta(days=29)).isoformat()
+    s = client.get(f"/api/dagbog/stats?user={uid}&frm={thirty}").json()
+    assert s["days"] == 2 and s["span"] == 2 and s["coverage"] == 100
+    assert s["amounts"]["exercise"] == {"total": 540, "days": 2, "perDay": 270, "perWeek": None}
+    assert s["amounts"]["soda"]["total"] == 5 and s["amounts"]["alcohol"] is None
 
 
 def test_migration_5_keeps_old_texts_private(fresh_db):

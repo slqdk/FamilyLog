@@ -365,6 +365,9 @@ def month_moods(viewer: dict, user_id: int, month: str) -> dict:
     return {"month": month, "days": {r["day"]: r["mood"] for r in rows}}
 
 
+WEEK_FROM = 7      # days filled in before an amount is shown per week
+
+
 def stats(viewer: dict, user_id: int, frm: str | None, to: str | None) -> dict:
     """One person's statistics for a period (0.3.9): how much is filled in,
     averages, months and weekdays, what they do and eat most, and which
@@ -382,19 +385,27 @@ def stats(viewer: dict, user_id: int, frm: str | None, to: str | None) -> dict:
         params.append(_day(to))
     with db.connect() as con:
         rows = con.execute(f"SELECT * FROM dagbog_entries WHERE {where} ORDER BY day", params).fetchall()
+        started = con.execute("SELECT MIN(day) FROM dagbog_entries WHERE user_id = ?", (user_id,)).fetchone()[0]
     entries = [_entry_dto(r, own=True) for r in rows]
     out: dict = {"person": who, "from": frm, "to": to, "days": len(entries), "fields": fields_for(user_id)}
     if not entries:
         return out
-    first = date.fromisoformat(frm) if frm else date.fromisoformat(entries[0]["day"])
-    last = date.fromisoformat(to) if to else date.today()
-    span = max(1, (min(last, date.today()) - first).days + 1)
+    # The share of days written counts from the period's start - or from the
+    # person's first day, when they began later (0.3.10: 2 days of 2 is 100%,
+    # not 7% of 30).
+    first = max(date.fromisoformat(frm), date.fromisoformat(started)) if frm else date.fromisoformat(started)
+    last = min(date.fromisoformat(to) if to else date.today(), date.today())
+    span = max(1, (last - first).days + 1)
 
-    def per_week(key):
-        # A week's motion, alcohol or sodavand from the days it was filled
-        # in - a day left empty is not a day of none.
+    def amount(key):
+        # Motion, alcohol, sodavand over the days it was filled in (a day left
+        # empty is not a day of none). A week's figure only from 7 such days
+        # on (0.3.10): two days, one of them 8 hours, are not "31,5 t a week".
         v = [e[key] for e in entries if e.get(key) is not None]
-        return round(mean(v) * 7, 1) if v else 0
+        if not v:
+            return None
+        return {"total": sum(v), "days": len(v), "perDay": round(mean(v), 1),
+                "perWeek": round(mean(v) * 7, 1) if len(v) >= WEEK_FROM else None}
 
     def avg(key):
         v = [e[key] for e in entries if e.get(key) is not None]
@@ -403,9 +414,7 @@ def stats(viewer: dict, user_id: int, frm: str | None, to: str | None) -> dict:
     out.update({
         "span": span, "coverage": round(len(entries) / span * 100),
         "mood": avg("mood"), "mental": avg("mental"),
-        "exerciseHoursPerWeek": round(per_week("exercise") / 60, 1),
-        "alcoholPerWeek": per_week("alcohol"),
-        "sodaPerWeek": per_week("soda"),
+        "amounts": {k: amount(k) for k in ("exercise", "alcohol", "soda")},
         "sickDays": sum(1 for e in entries if e.get("sick")),
     })
     # Months: mood, overskud, motion hours, alcohol.

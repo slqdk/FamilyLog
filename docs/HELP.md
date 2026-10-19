@@ -513,7 +513,7 @@ Settings → Maps.
 title: Dagbog
 where: Top bar (administrator)
 since: 0.2.0
-changed: 0.3.9
+changed: 0.3.10
 
 The Dagbog's settings. Everyone rates their own day on the front page
 (**Dagbog**): mood (5 smileys), mental readiness (1-10), motion, what they ate
@@ -524,7 +524,8 @@ highlight (a text and a photo).
 their last 7 days; tap one for all their days - back to the first, with a
 month calendar to jump - and their **Statistik** (averages, months,
 weekdays, what they do and eat most, and what goes with a better or worse
-mood). Since 0.3.9 the family also sees the text and photo of a day, unless
+mood). Motion, alcohol and sodavand show as a total until 7 days have them
+filled in, then as a week's average. Since 0.3.9 the family also sees the text and photo of a day, unless
 its author unticks *Familien kan se teksten og billedet* for that day. Days
 written before 0.3.9 with a text or photo stay private until their author
 shares them. A *user* account is not family: its days are its own.

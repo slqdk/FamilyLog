@@ -5,6 +5,16 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.3.10 - Start here
+
+`dagbog.stats`: `coverage` = days / span, span from max(period start, the
+person's first day) to min(period end, today). Motion/alkohol/sodavand are
+`amounts.<key> = {total, days, perDay, perWeek}` (null when never filled in;
+`perWeek` null below `WEEK_FROM` = 7 filled-in days); the old
+`*PerWeek` keys are gone. Frontend `AmountKpi` shows the total until then.
+
+---
+
 ## 0.3.9 - Start here
 
 Dagbog → Familien is per person (`src/home/DagbogFamily.tsx`, `FamilyPage`):

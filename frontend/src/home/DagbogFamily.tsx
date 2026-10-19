@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FmUser } from '../sections/familymap/phone/types';
-import { homeApi, type DagbogCount, type DagbogEntry, type DagbogFamily, type DagbogPerson, type DagbogStats } from './api';
+import { homeApi, type DagbogAmount, type DagbogCount, type DagbogEntry, type DagbogFamily, type DagbogPerson, type DagbogStats } from './api';
 import { Bar, Dots, Tabs, hoursText } from './Dagbog';
 import {
   addDays, addMonths, dayOfMonth, dayTitle, face, mean, monthGrid, monthShort, monthTitle, routeHash, todayLocal,
@@ -252,12 +252,15 @@ function PersonStats({ uid, today }: { uid: number; today: string }) {
             <Kpi label="Længste stribe" value={String(s.bestStreak)} sub="dage i træk" />
             {has('mood') && s.mood != null && <Kpi label="Humør" value={`${face(s.mood)} ${one(s.mood)}`} sub="af 5 i snit" />}
             {has('mental') && s.mental != null && <Kpi label="Mentalt overskud" value={one(s.mental)} sub="af 10 i snit" />}
-            {has('exercise') && <Kpi label="Motion" value={`${one(s.exerciseHoursPerWeek ?? 0)} t`} sub="om ugen i snit" />}
-            {has('alcohol') && <Kpi label="Alkohol" value={one(s.alcoholPerWeek ?? 0)} sub="genstande om ugen i snit" />}
-            {has('soda') && <Kpi label="Sodavand" value={one(s.sodaPerWeek ?? 0)} sub="glas om ugen i snit" />}
+            {has('exercise') && <AmountKpi label="Motion" a={s.amounts?.exercise} unit=""
+                                           show={(x) => (x === Math.round(x) && x % 30 === 0 ? hoursText(x) : `${one(x / 60)} t`)} />}
+            {has('alcohol') && <AmountKpi label="Alkohol" a={s.amounts?.alcohol} unit="genstande " show={amountText} />}
+            {has('soda') && <AmountKpi label="Sodavand" a={s.amounts?.soda} unit="glas " show={amountText} />}
             {has('sick') && <Kpi label="Syg eller skadet" value={String(s.sickDays ?? 0)} sub={s.sickDays === 1 ? 'dag' : 'dage'} />}
           </section>
-          {s.days < 14 && <p className="hm-lead">Ugetallene er regnet ud fra {s.days === 1 ? 'én dag' : `${s.days} dage`} - de bliver mere sikre, jo flere dage der er skrevet.</p>}
+          {Object.values(s.amounts ?? {}).some((a) => a && a.perWeek == null) && (
+            <p className="hm-lead">Motion, alkohol og sodavand vises i alt, til der er 7 dage med dem udfyldt - så om ugen i snit.</p>
+          )}
           {has('mood') && (s.months ?? []).length > 1 && <MonthBars months={s.months!} />}
           {has('mood') && (s.weekdays ?? []).some((x) => x != null) && (
             <section className="fm-sheet hm-stat" aria-label="Humør pr. ugedag">
@@ -291,6 +294,21 @@ function PersonStats({ uid, today }: { uid: number; today: string }) {
       )}
     </>
   );
+}
+
+const amountText = (x: number) => (x === Math.round(x) ? String(x) : one(x));
+const daysText = (n: number) => (n === 1 ? 'én dag' : `${n} dage`);
+
+/** Motion, alkohol or sodavand: a week's average from 7 filled-in days, the
+    total before that - two days are no week (0.3.10). */
+function AmountKpi({ label, a, unit, show }: {
+  label: string; a: DagbogAmount | null | undefined;
+  unit: string; show: (x: number) => string;
+}) {
+  if (!a) return <Kpi label={label} value="–" sub="ikke udfyldt i perioden" />;
+  if (a.perWeek != null) return <Kpi label={label} value={show(a.perWeek)} sub={`${unit}om ugen i snit`} />;
+  const u = a.total === 1 && unit === 'genstande ' ? 'genstand ' : unit;
+  return <Kpi label={label} value={show(a.total)} sub={`${u}i alt på ${daysText(a.days)}`} />;
 }
 
 function Kpi({ label, value, sub }: { label: string; value: string; sub: string }) {
