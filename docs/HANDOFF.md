@@ -5,6 +5,26 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.4.0 - Start here
+
+AI server = SLQ Hub (github.com/slqdk/SLQ-Hub, its `docs/API.md`) or Ollama.
+Settings: `aiServer` (`hub` | `ollama`, default `ollama` so nothing changes
+until switched), `hubUrl`, `hubKey` (SECRET_KEYS; `public()` gives
+`hubKeySet` + `hubKeyHint`). `settings.save` splits a pasted
+`.../k/slqhub_.../` line into address + key; `settings.hub_base()` adds port
+11434 when none is given (the Hub serves the same app on 8080 too).
+`ollama.server()` is the one place that picks base URL + headers: with the
+Hub the key goes as `Authorization: Bearer` (the Hub's gate accepts Bearer on
+`/api/*`), never in the path, so no error text or log can carry it; errors
+say "SLQ Hub" and 401/403/503 have their own wording (`status_reason`).
+`jobqueue.LocalBroker` skips the ComfyUI free with the Hub; `keep_alive` is
+not sent. The test endpoint is still `/api/settings/test-ollama` with
+`{url, server, key}`. The mock refuses a Bearer key that is not `slqhub_` or
+contains "revoked" (401). NOT verified against the real Hub yet - the first
+real test is Søren's Test button.
+
+---
+
 ## 0.3.13 - Start here
 
 Chat.tsx `AnswerText`: no places -> `core/Markdown` (GFM, inside `.hm-md`);

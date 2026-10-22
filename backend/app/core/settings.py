@@ -18,12 +18,20 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from . import db
 
 DEFAULTS: dict = {
+    # ---- the AI server (0.4.0) ----
+    # "hub": SLQ Hub on the LAN (github.com/slqdk/SLQ-Hub) - its Ollama-format
+    # API on port 11434 with an app key; the Hub's own queue owns the GPU, so
+    # ComfyUI is not touched. "ollama": a plain Ollama (the old way).
+    "aiServer": "ollama",
+    "hubUrl": "",               # the Hub's LAN address, e.g. http://30.11.0.140
+    "hubKey": "",               # slqhub_...; never sent back to the browser
     # ---- Ollama ----
     "ollamaUrl": "http://30.11.0.104:11434",
     "modelChat": "",            # answers: Økonomi ask, Spørg Alf
@@ -54,6 +62,9 @@ DEFAULTS: dict = {
 }
 
 ENV_OVERRIDES = {
+    "aiServer": "APP_AI_SERVER",
+    "hubUrl": "APP_HUB_URL",
+    "hubKey": "APP_HUB_KEY",
     "ollamaUrl": "APP_OLLAMA_URL",
     "comfyUrl": "APP_COMFY_URL",
     "searxngUrl": "APP_SEARXNG_URL",
@@ -63,8 +74,12 @@ ENV_OVERRIDES = {
 }
 
 ROLES = {"chat": "modelChat", "vision": "modelVision", "categorise": "modelCategorise"}
-SECRET_KEYS = {"searchApiKey"}
-URL_KEYS = {"ollamaUrl", "comfyUrl", "searxngUrl", "nominatimUrl", "overpassUrl"}
+SECRET_KEYS = {"searchApiKey", "hubKey"}
+URL_KEYS = {"ollamaUrl", "hubUrl", "comfyUrl", "searxngUrl", "nominatimUrl", "overpassUrl"}
+AI_SERVERS = ("hub", "ollama")
+HUB_OLLAMA_PORT = 11434
+_HUB_KEY = re.compile(r"^slqhub_[A-Za-z0-9_\-]{10,200}$")
+_PATH_KEY = re.compile(r"/k/(slqhub_[A-Za-z0-9_\-]+)/?.*$")
 SEARCH_PROVIDERS = ("duckduckgo", "searxng", "brave")
 BROKERS = ("local",)
 
@@ -106,6 +121,11 @@ def public() -> dict:
     s = load()
     out = {k: v for k, v in s.items() if k not in SECRET_KEYS}
     out["searchApiKeySet"] = bool(s.get("searchApiKey"))
+    key = s.get("hubKey") or ""
+    out["hubKeySet"] = bool(key)
+    # The start of the key, as the Hub's own key list shows it - enough to
+    # tell which key is in use, never enough to use it.
+    out["hubKeyHint"] = key[:11] + "…" if key else ""
     out["envPinned"] = _env_pins()
     return out
 
@@ -121,6 +141,17 @@ def _clean(key: str, value):
         return str(value or "").strip()[:200]
     if key == "searchApiKey":
         return str(value or "").strip()[:200]
+    if key == "hubKey":
+        value = str(value or "").strip()
+        if value and not _HUB_KEY.match(value):
+            raise Invalid("The SLQ Hub key starts with slqhub_ - copy it from the Hub's "
+                          "Settings → Apps and keys (it is shown once, when the key is made).")
+        return value
+    if key == "aiServer":
+        value = str(value or "").strip().lower()
+        if value not in AI_SERVERS:
+            raise Invalid("aiServer must be hub or ollama.")
+        return value
     if key == "contextMax":
         try:
             n = int(value)
@@ -173,9 +204,16 @@ def save(patch: dict) -> dict:
     if pinned:
         raise Invalid(", ".join(f"{k} is set by {ENV_OVERRIDES[k]}" for k in pinned)
                       + " in the container's environment - change it there.")
+    patch = dict(patch)
+    url = patch.get("hubUrl")
+    if isinstance(url, str) and (m := _PATH_KEY.search(url)):
+        # The Hub's "Ollama apps" line pasted whole (http://HUB:11434/k/slqhub_.../):
+        # the key goes where keys go, the address keeps only the host.
+        patch["hubUrl"] = url[:m.start()]
+        patch.setdefault("hubKey", m.group(1))
     saved = _saved()
     for key, value in patch.items():
-        if key == "searchApiKey" and value is None:
+        if key in ("searchApiKey", "hubKey") and value is None:
             saved.pop(key, None)
             continue
         saved[key] = _clean(key, value)
@@ -187,6 +225,23 @@ def save(patch: dict) -> dict:
     if "timezone" in patch:
         apply_timezone()
     return public()
+
+
+def hub_base(url: str | None = None, settings: dict | None = None) -> str:
+    """The Hub's Ollama-format address: its LAN address with port 11434 added
+    when none is given."""
+    from urllib.parse import urlparse
+    url = (url if url is not None else (settings or load()).get("hubUrl") or "").strip().rstrip("/")
+    if not url:
+        return ""
+    p = urlparse(url)
+    if p.port is None and p.hostname:
+        url = f"{p.scheme}://{p.hostname}:{HUB_OLLAMA_PORT}{p.path}"
+    return url.rstrip("/")
+
+
+def uses_hub(settings: dict | None = None) -> bool:
+    return (settings or load()).get("aiServer") == "hub"
 
 
 def role_model(role: str) -> str:

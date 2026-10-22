@@ -5,7 +5,12 @@
 services:
   app:
     environment:
-      # The GPU VM. Pinned here = locked in Settings. Leave them out to
+      # SLQ Hub (0.4.0) - normally set in Settings → AI server instead.
+      # Pinned here = locked there. Keep the key out of git: this file is ignored.
+      # APP_AI_SERVER: "hub"
+      # APP_HUB_URL: "http://30.11.0.140"
+      # APP_HUB_KEY: "slqhub_..."
+      # The old GPU VM. Pinned here = locked in Settings. Leave them out to
       # set them in the Settings page instead.
       APP_OLLAMA_URL: "http://30.11.0.104:11434"
       APP_COMFY_URL: "http://30.11.0.104:8188"

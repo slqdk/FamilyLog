@@ -179,7 +179,18 @@ class H(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _hub_refuses(self) -> bool:
+        """SLQ Hub's gate, roughly (FamilyLog 0.4.0): a Bearer key that is not an
+        slqhub_ key, or one with "revoked" in it, gets 401. No header: plain Ollama."""
+        auth = self.headers.get("Authorization")
+        if auth is not None and (not auth.startswith("Bearer slqhub_") or "revoked" in auth):
+            self._json({"error": "invalid or disabled API key"}, 401)
+            return True
+        return False
+
     def do_GET(self):
+        if self._hub_refuses():
+            return
         if self.path == "/api/version":
             return self._json({"version": "0.32.5-mock"})
         if self.path == "/api/tags":
@@ -197,6 +208,8 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length") or 0)
         req = json.loads(self.rfile.read(length) or b"{}")
+        if self._hub_refuses():
+            return
         if self.path == "/api/show":
             m = MODELS.get(req.get("model") or req.get("name") or "")
             if not m:

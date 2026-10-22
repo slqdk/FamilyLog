@@ -8,6 +8,7 @@ import { sectionsFor, SECTIONS } from '../sections/registry';
 import type { SettingsDto } from './types';
 
 const SETTINGS: SettingsDto = {
+  aiServer: 'ollama', hubUrl: '', hubKeySet: false, hubKeyHint: '',
   ollamaUrl: 'http://30.11.0.104:11434', modelChat: '', modelVision: '', modelCategorise: '',
   ollamaKeepAlive: '', contextMax: 16384, comfyUrl: '', comfyFreeFirst: true, gpuBroker: 'local',
   searchProvider: 'duckduckgo', searxngUrl: '', searchResults: 4, searchFetch: 3, searchBlockedRanges: '',
@@ -38,7 +39,7 @@ describe('Settings', () => {
     const url = await screen.findByDisplayValue('http://30.11.0.104:11434');
     fireEvent.change(url, { target: { value: 'http://mock:11434' } });
     fireEvent.click(screen.getByRole('button', { name: 'Test Ollama' }));
-    expect(test).toHaveBeenCalledWith('http://mock:11434');
+    expect(test).toHaveBeenCalledWith('http://mock:11434', 'ollama');
     expect(await screen.findByText(/Connected - 2 models/)).toBeInTheDocument();
     const models = container.querySelector('[data-help="settings.models"]') as HTMLElement;
     const [chat, vision] = within(models).getAllByRole('combobox');
@@ -48,6 +49,37 @@ describe('Settings', () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith(
       { ollamaUrl: 'http://mock:11434', modelChat: 'qwen3.6:27b', modelVision: 'qwen3-vl:8b' }));
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  it('SLQ Hub: an address and a key, tested before saving; ComfyUI goes (0.4.0)', async () => {
+    mockSettings();
+    const test = vi.spyOn(api, 'testOllama').mockResolvedValue({
+      ok: true, url: 'http://30.11.0.140:11434', error: null,
+      models: [{ name: 'qwen3.8-27b', size: null, family: null, parameters: null, quantization: null }] });
+    const save = vi.spyOn(api, 'saveSettings').mockImplementation(async (p) => ({ ...SETTINGS, ...p } as SettingsDto));
+    render(<SettingsPage me={{ id: 1 }} />);
+    expect(await screen.findByText('ComfyUI address')).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: 'AI server' }), { target: { value: 'hub' } });
+    expect(screen.queryByText('ComfyUI address')).toBeNull();
+    expect(screen.queryByText('Keep loaded')).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText('http://30.11.0.140'), { target: { value: 'http://30.11.0.140' } });
+    fireEvent.change(screen.getByLabelText('SLQ Hub API key'), { target: { value: 'slqhub_abcdefghijkl' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Test SLQ Hub' }));
+    expect(test).toHaveBeenCalledWith('http://30.11.0.140', 'hub', 'slqhub_abcdefghijkl');
+    expect(await screen.findByText(/Connected - 1 model at http:\/\/30.11.0.140:11434/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save (3)' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(
+      { aiServer: 'hub', hubUrl: 'http://30.11.0.140', hubKey: 'slqhub_abcdefghijkl' }));
+  });
+
+  it('a saved Hub key shows only its start and can be removed', async () => {
+    mockSettings({ aiServer: 'hub', hubUrl: 'http://30.11.0.140', hubKeySet: true, hubKeyHint: 'slqhub_abcd…' });
+    const save = vi.spyOn(api, 'saveSettings').mockImplementation(async (p) => ({ ...SETTINGS, ...p } as SettingsDto));
+    render(<SettingsPage me={{ id: 1 }} />);
+    expect(await screen.findByText(/Saved: slqhub_abcd…/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save (1)' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith({ hubKey: null }));
   });
 
   it('says why a test failed', async () => {

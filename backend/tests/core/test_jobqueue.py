@@ -150,6 +150,16 @@ def test_the_broker_skips_it_when_switched_off(fresh_db, monkeypatch):
     assert all(s["label"] != "Free GPU (ComfyUI)" for s in steps)
 
 
+def test_with_slq_hub_comfy_is_never_touched(fresh_db, monkeypatch):
+    """0.4.0: the Hub's own queue owns the GPU - this app does not free ComfyUI."""
+    from app.core import settings
+    settings.save({"aiServer": "hub", "hubUrl": "http://hub.lan", "comfyFreeFirst": True})
+    calls = _with_free(monkeypatch, True)
+    steps, state = _run_one()
+    assert not calls and state["ran"]
+    assert all(s["label"] != "Free GPU (ComfyUI)" for s in steps)
+
+
 def test_a_failing_free_does_not_stop_the_job(fresh_db, monkeypatch):
     calls = _with_free(monkeypatch, RuntimeError("comfy exploded"))
     steps, state = _run_one()

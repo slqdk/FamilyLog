@@ -51,7 +51,8 @@ Environment (compose file / override):
 | Variable | Meaning |
 |---|---|
 | `APP_DATA_DIR` | the data folder (`/data`) |
-| `APP_OLLAMA_URL`, `APP_COMFY_URL` | the GPU VM; when set they win over Settings, and the Settings page shows them locked |
+| `APP_AI_SERVER`, `APP_HUB_URL`, `APP_HUB_KEY` | SLQ Hub (0.4.0): `hub`, its LAN address, the app key; when set they win over Settings → AI server and show locked. Put the key only in the git-ignored override file |
+| `APP_OLLAMA_URL`, `APP_COMFY_URL` | the old GPU VM; when set they win over Settings, and the Settings page shows them locked |
 | `APP_SEARXNG_URL`, `APP_NOMINATIM_URL`, `APP_OVERPASS_URL`, `APP_TIMEZONE` | the same, for those settings |
 | `TZ` | `Europe/Copenhagen` for the container itself |
 | `APP_BACKUP_DIR` | (on the host, for update.sh) where backups go; default `/opt/familylog-backups` |

@@ -33,7 +33,8 @@ export const api = {
 
   getSettings: () => fetch('/api/settings').then(json<SettingsDto>),
   saveSettings: (patch: SettingsPatch) => fetch('/api/settings', send('PUT', patch)).then(json<SettingsDto>),
-  testOllama: (url: string) => fetch('/api/settings/test-ollama', send('POST', { url })).then(json<OllamaTest>),
+  testOllama: (url: string, server?: 'hub' | 'ollama', key?: string) =>
+    fetch('/api/settings/test-ollama', send('POST', { url, server, key })).then(json<OllamaTest>),
   testComfy: (url: string) => fetch('/api/settings/test-comfy', send('POST', { url })).then(json<ComfyTest>),
   diagnostics: () => fetch('/api/diagnostics').then(json<Diagnostics>),
   clearRecent: () => fetch('/api/diagnostics/recent', { method: 'DELETE' }).then(json<{ ok: boolean }>),

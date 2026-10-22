@@ -50,7 +50,9 @@ class LocalBroker:
     name = "local"
 
     async def acquire(self, job: dict):
-        if not settings.load().get("comfyFreeFirst", True):
+        s = settings.load()
+        if settings.uses_hub(s) or not s.get("comfyFreeFirst", True):
+            # 0.4.0: SLQ Hub's own queue owns the GPU and frees ComfyUI itself.
             return None
         with telemetry.span("Free GPU (ComfyUI)", "stage") as step:
             try:

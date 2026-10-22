@@ -119,6 +119,25 @@ with sync_playwright() as p:
     check("a failing Test says why",
           "not answering" in page.locator("[data-help='settings.ollamaTest'] .fma-error").inner_text())
     page.get_by_role("button", name="Undo").click()
+    # 0.4.0: SLQ Hub as the AI server - the rest of the check runs through it
+    # (the mock refuses a request whose Bearer key is not an slqhub_ key).
+    page.get_by_role("combobox", name="AI server").select_option("hub")
+    check("with the Hub the GPU section goes", page.locator("[data-help='settings.gpu']").count() == 0)
+    page.get_by_placeholder("http://30.11.0.140").fill(MOCK)
+    page.get_by_label("SLQ Hub API key").fill("slqhub_revoked0123456789")
+    page.get_by_role("button", name="Test SLQ Hub").click()
+    page.wait_for_selector("[data-help='settings.ollamaTest'] .fma-error")
+    err = page.locator("[data-help='settings.ollamaTest'] .fma-error").inner_text()
+    check("a refused Hub key says so, without the key", "refused the key" in err and "revoked" not in err, err)
+    page.get_by_label("SLQ Hub API key").fill("slqhub_browsercheck0123")
+    page.get_by_role("button", name="Test SLQ Hub").click()
+    page.wait_for_selector("text=/Connected - 3 models/")
+    page.get_by_role("button", name="Save (3)").click()
+    page.wait_for_selector(".settings-head .fma-ok")
+    page.screenshot(path=f"{OUT}/01b-settings-hub.png", full_page=True)
+    hint = page.locator("[data-help='settings.ollama']").inner_text()
+    check("the saved Hub key shows only its start", "slqhub_brow…" in hint and "browsercheck0123" not in page.content(),
+          hint[:200])
 
     # ---- Økonomi ---------------------------------------------------------------------
     page.locator(".nav-btn", has_text="Økonomi").click()

@@ -264,17 +264,32 @@ class UrlBody(BaseModel):
     url: str | None = None
 
 
+class AiTestBody(BaseModel):
+    url: str | None = None
+    server: str | None = None        # "hub" | "ollama"; empty = the saved choice
+    key: str | None = None           # an SLQ Hub key typed but not saved yet
+
+
 @app.post("/api/settings/test-ollama")
-async def test_ollama(body: UrlBody, request: Request):
+async def test_ollama(body: AiTestBody, request: Request):
     """The Test button: list the models at this address (the unsaved one in
-    the form, or the saved one). The answer says why when it fails."""
+    the form, or the saved one) - Ollama, or SLQ Hub with its key (0.4.0).
+    The answer says why when it fails; the key is never in it."""
     require_admin(request)
-    url = (body.url or "").strip() or settings.load()["ollamaUrl"]
-    if url and not url.startswith(("http://", "https://")):
-        return {"ok": False, "url": url, "models": [],
+    s = settings.load()
+    hub = (body.server or s["aiServer"]) == "hub"
+    raw = (body.url or "").strip() or (s["hubUrl"] if hub else s["ollamaUrl"])
+    if raw and not raw.startswith(("http://", "https://")):
+        return {"ok": False, "url": raw, "models": [],
                 "error": "The address must start with http:// or https://."}
+    key = (body.key or "").strip()
+    if hub and (m := settings._PATH_KEY.search(raw)):
+        raw, key = raw[:m.start()], key or m.group(1)
+    srv = ollama.server({**s, "aiServer": "hub" if hub else "ollama",
+                         "hubKey": key or s["hubKey"]})
+    url = settings.hub_base(raw) if hub else raw.rstrip("/")
     try:
-        models = await ollama.tags(url)
+        models = await ollama.tags(url, srv)
     except ollama.OllamaError as exc:
         return {"ok": False, "url": url, "models": [], "error": str(exc)}
     return {"ok": True, "url": url, "models": models, "error": None}

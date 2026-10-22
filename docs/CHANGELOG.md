@@ -2,6 +2,33 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.4.0 - 2026-10-22
+
+SLQ Hub as the AI server - it takes over from Ollama and ComfyUI.
+
+**ACTION REQUIRED**:
+1. `cd /opt/familylog && bash update.sh`.
+2. In SLQ Hub: Settings → Apps and keys → **New key**, app "FamilyLog",
+   priority *normal*. Copy the key (shown once).
+3. In FamilyLog's admin app: Settings → **AI server** → *SLQ Hub*. Type the
+   Hub's LAN address and paste the key (or paste the Hub's whole "Ollama
+   apps" line as the address - the key is split off). **Test**, then pick
+   the models (`qwen3.8-27b` for chat and vision, `qwen3.6-35b-a3b` for
+   categorise) and **Save**.
+4. Økonomi per person and FamilyMap may have their own model chosen - set
+   them to the Hub's names too, or empty to use the one from Settings.
+
+- **SLQ Hub** (address + API key) or **Ollama** under Settings → AI server.
+  The Hub's Ollama-format API is used, so everything works as before:
+  Alf, Økonomi, categorising, photo descriptions.
+- The key is sent as `Authorization: Bearer`, stored on the server only and
+  never shown again (only its start, like the Hub's own list).
+- With the Hub, ComfyUI is never touched and "keep loaded" is not sent: the
+  Hub's queue owns the GPU. The GPU section is hidden.
+- Clear messages when the Hub refuses: the key (401), this server's address
+  (403), or a queue wait that ran out (503).
+- `APP_AI_SERVER`, `APP_HUB_URL`, `APP_HUB_KEY` can pin it from the container.
+
 ## 0.3.13 - 2026-10-19
 
 **ACTION REQUIRED**: `cd /opt/familylog && bash update.sh`.

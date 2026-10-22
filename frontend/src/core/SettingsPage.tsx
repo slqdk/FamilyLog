@@ -4,7 +4,7 @@ import type {
   ComfyTest, Diagnostics, OllamaTest, SettingsDto, SettingsPatch, UserDto,
 } from './types';
 
-/** The app's global settings (admin only): the Ollama connection and the
+/** The app's global settings (admin only): the AI server (SLQ Hub or Ollama) and the
     model per role, the GPU, web search, maps, time zone, the accounts and
     diagnostics. One Save for the settings; Test buttons act at once on the
     address typed in the form, saved or not. A value pinned by the
@@ -27,7 +27,7 @@ export function SettingsPage({ me }: { me: { id: number } }) {
     setDraft((d) => {
       const next = { ...d, [k]: v };
       // The key: typed-then-erased is "no change"; only null (Remove) clears it.
-      if (k === 'searchApiKey' ? v === '' : saved && (saved as unknown as SettingsPatch)[k] === v) delete next[k];
+      if (k === 'searchApiKey' || k === 'hubKey' ? v === '' : saved && (saved as unknown as SettingsPatch)[k] === v) delete next[k];
       return next;
     });
   };
@@ -60,8 +60,8 @@ export function SettingsPage({ me }: { me: { id: number } }) {
           </button>
         </header>
 
-        <OllamaGroup value={value} set={set} pinned={pinned} />
-        <GpuGroup value={value} set={set} pinned={pinned} />
+        <OllamaGroup value={value} set={set} pinned={pinned} saved={saved} />
+        {value('aiServer') !== 'hub' && <GpuGroup value={value} set={set} pinned={pinned} />}
         <SearchGroup value={value} set={set} pinned={pinned} keySet={saved.searchApiKeySet} />
         <Group title="Maps" help="settings.maps">
           <Text label="Nominatim (address lookup)" k="nominatimUrl" value={value} set={set} pinned={pinned}
@@ -109,7 +109,7 @@ function Row({ label, hint, children, lock }: { label: string; hint?: ReactNode;
 }
 
 function Text({ label, k, value, set, pinned, hint, placeholder }: {
-  label: string; k: 'ollamaUrl' | 'comfyUrl' | 'searxngUrl' | 'nominatimUrl' | 'overpassUrl' | 'timezone'
+  label: string; k: 'ollamaUrl' | 'hubUrl' | 'comfyUrl' | 'searxngUrl' | 'nominatimUrl' | 'overpassUrl' | 'timezone'
     | 'ollamaKeepAlive' | 'searchBlockedRanges';
   value: Value; set: Setter; pinned: Pinned; hint?: ReactNode; placeholder?: string;
 }) {
@@ -128,31 +128,64 @@ function modelOptions(models: string[], current: string, empty: string) {
           ...list.map((m) => <option key={m} value={m}>{m}{models.includes(m) ? '' : ' (not on the server)'}</option>)];
 }
 
-// ---- Ollama ---------------------------------------------------------------------------
+// ---- the AI server: SLQ Hub or Ollama (0.4.0) -------------------------------------------
 
-function OllamaGroup({ value, set, pinned }: { value: Value; set: Setter; pinned: Pinned }) {
+function OllamaGroup({ value, set, pinned, saved }: { value: Value; set: Setter; pinned: Pinned; saved: SettingsDto }) {
   const [test, setTest] = useState<OllamaTest | null>(null);
   const [testing, setTesting] = useState(false);
   const [installed, setInstalled] = useState<string[]>([]);
   useEffect(() => { api.listOllamaModels().then(setInstalled).catch(() => setInstalled([])); }, []);
   const names = useMemo(() => test?.ok ? test.models.map((m) => m.name) : installed, [test, installed]);
+  const hub = value('aiServer') === 'hub';
+  const key = value('hubKey');
 
   async function runTest() {
     setTesting(true);
-    try { setTest(await api.testOllama(String(value('ollamaUrl') ?? ''))); }
-    catch (e) { setTest({ ok: false, url: '', models: [], error: (e as Error).message }); }
+    try {
+      setTest(hub
+        ? await api.testOllama(String(value('hubUrl') ?? ''), 'hub', typeof key === 'string' ? key : undefined)
+        : await api.testOllama(String(value('ollamaUrl') ?? ''), 'ollama'));
+    } catch (e) { setTest({ ok: false, url: '', models: [], error: (e as Error).message }); }
     finally { setTesting(false); }
   }
 
   return (
-    <Group title="Ollama" help="settings.ollama">
-      <Text label="Ollama address" k="ollamaUrl" value={value} set={set} pinned={pinned}
-            hint="The GPU VM's Ollama, e.g. http://30.11.0.104:11434." />
+    <Group title="AI server" help="settings.ollama">
+      <Row label="Server" lock={pinned('aiServer')}>
+        <select aria-label="AI server" value={hub ? 'hub' : 'ollama'} disabled={!!pinned('aiServer')}
+                onChange={(e) => { setTest(null); set('aiServer', e.target.value as 'hub' | 'ollama'); }}>
+          <option value="hub">SLQ Hub (address and API key)</option>
+          <option value="ollama">Ollama (the old way)</option>
+        </select>
+      </Row>
+      {hub ? (
+        <>
+          <Text label="SLQ Hub address" k="hubUrl" value={value} set={set} pinned={pinned} placeholder="http://30.11.0.140"
+                hint={<>The Hub's LAN address. Port 11434 is used when none is given. Pasting the Hub's whole
+                  “Ollama apps” line (…/k/slqhub_…/) fills in the key too.</>} />
+          <Row label="API key" lock={pinned('hubKey')}
+               hint={key === null ? 'Will be removed on Save.'
+                 : saved.hubKeySet ? `Saved: ${saved.hubKeyHint} Type a new one to replace it.`
+                 : <>Make one in the Hub: Settings → Apps and keys → New key (app “FamilyLog”, priority normal). It is shown once.</>}>
+            <span className="settings-inline">
+              <input type="password" autoComplete="off" aria-label="SLQ Hub API key" disabled={!!pinned('hubKey')}
+                     value={typeof key === 'string' ? key : ''} placeholder={saved.hubKeySet ? '•••••••• (saved)' : 'slqhub_…'}
+                     onChange={(e) => set('hubKey', e.target.value)} />
+              {saved.hubKeySet && !pinned('hubKey') && <button className="ghost-btn sm" onClick={() => set('hubKey', null)}>Remove</button>}
+            </span>
+          </Row>
+          <p className="settings-note">The Hub's queue owns the GPU: ComfyUI and “keep loaded” are not used, and the
+            models below are the Hub's names (qwen3.8-27b, qwen3.6-35b-a3b, …).</p>
+        </>
+      ) : (
+        <Text label="Ollama address" k="ollamaUrl" value={value} set={set} pinned={pinned}
+              hint="The GPU VM's Ollama, e.g. http://30.11.0.104:11434." />
+      )}
       <div className="settings-row">
         <span className="settings-label" />
         <span className="settings-control">
           <span className="settings-inline" data-help="settings.ollamaTest">
-            <button className="ghost-btn" disabled={testing} aria-label="Test Ollama" onClick={() => void runTest()}>
+            <button className="ghost-btn" disabled={testing} aria-label={hub ? 'Test SLQ Hub' : 'Test Ollama'} onClick={() => void runTest()}>
               {testing ? 'Testing…' : 'Test'}
             </button>
             {test && (test.ok
@@ -192,9 +225,9 @@ function OllamaGroup({ value, set, pinned }: { value: Value; set: Setter; pinned
       </div>
       <details className="settings-more">
         <summary>More</summary>
-        <Text label="Keep loaded" k="ollamaKeepAlive" value={value} set={set} pinned={pinned}
+        {!hub && <Text label="Keep loaded" k="ollamaKeepAlive" value={value} set={set} pinned={pinned}
               placeholder="Ollama's default (5m)"
-              hint="How long Ollama keeps a model after a call: 5m, 30m, -1 (until unloaded). The GPU is shared, so short is kind." />
+              hint="How long Ollama keeps a model after a call: 5m, 30m, -1 (until unloaded). The GPU is shared, so short is kind." />}
         <Row label="Context window, max" hint="Tokens asked for at most; smaller if the model's own length is smaller.">
           <input type="number" min={2048} max={262144} step={1024} value={Number(value('contextMax') ?? 16384)}
                  onChange={(e) => set('contextMax', Number(e.target.value))} />

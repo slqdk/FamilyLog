@@ -103,11 +103,26 @@ person can be signed in on two devices at once - a third sign-in ends the
 least recently used one.
 
 ## settings.ollama
-title: Ollama
+title: AI server
 where: Settings
 since: 0.1.0
+changed: 0.4.0
 
-**Ollama address** is the GPU VM's Ollama (default
+**Server** chooses where every model job goes (0.4.0):
+
+- **SLQ Hub** - the Hub on the LAN. **SLQ Hub address** is its LAN address
+  (`http://30.11.0.140`; port 11434 is added when none is given). **API key**
+  is an app key from the Hub: Settings → Apps and keys → New key (app
+  "FamilyLog", priority *normal*); the Hub shows it once. Pasting the Hub's
+  whole "Ollama apps" line (`http://HUB:11434/k/slqhub_.../`) into the
+  address fills in the key too. The key is stored on the server, sent to the
+  Hub as `Authorization: Bearer`, and never shown again - the page shows only
+  its start, as the Hub's own key list does. The Hub's queue owns the GPU, so
+  the GPU section (ComfyUI) and **Keep loaded** are hidden; the models are
+  the Hub's names (`qwen3.8-27b`, `qwen3.6-35b-a3b`, ...).
+- **Ollama** - a plain Ollama, as before 0.4.0.
+
+With Ollama: **Ollama address** is the GPU VM's Ollama (default
 `http://30.11.0.104:11434`). If the container sets `APP_OLLAMA_URL`, the
 field is locked and names the variable - change it in
 `docker-compose.override.yml`. Under **More**: **Keep loaded** is how long
@@ -116,18 +131,21 @@ is shared, so short is kind), and **Context window, max** caps the context
 asked for (the model's own length is used when it is smaller).
 
 ## settings.ollamaTest
-title: Test the Ollama connection
-where: Settings → Ollama
+title: Test the connection
+where: Settings → AI server
 since: 0.1.0
+changed: 0.4.0
 
-Asks the address in the field (saved or not) for its models (`/api/tags`)
-and lists them with size, parameters and quantisation. The model pickers
-below then offer exactly those. When it fails it says why - not answering,
-an HTTP status, or an address without http://.
+Asks the address in the field (saved or not) - with the key typed or saved,
+for SLQ Hub - for its models (`/api/tags`) and lists them. The model
+pickers below then offer exactly those. When it fails it says why: not
+answering, the Hub refused the key (wrong, switched off or deleted), the Hub
+refused this server's address (not on the LAN, or not one the key allows),
+or an address without http://.
 
 ## settings.models
 title: Models per role
-where: Settings → Ollama
+where: Settings → AI server
 since: 0.1.0
 
 One model per job. **Chat / answers**: Økonomi questions and Spørg Alf.
@@ -149,8 +167,8 @@ address** is only used to ask ComfyUI to free its VRAM before a job when
 **Free ComfyUI VRAM first** is on, so the Ollama model loads whole instead
 of half on the CPU. It is best effort: an unreachable ComfyUI costs a few
 seconds at most and never fails the job; the job's Steps show "Free GPU
-(ComfyUI)" with the outcome. **Queue** is this app's own; a queue shared
-with SLQ comes when SLQ's GPU-job API exists.
+(ComfyUI)" with the outcome. **Queue** is this app's own. With SLQ Hub as the
+AI server (0.4.0) this section is hidden: the Hub's queue owns the GPU.
 
 ## settings.search
 title: Web search

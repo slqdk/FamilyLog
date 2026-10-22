@@ -67,7 +67,7 @@ def _extra_blocked(settings: dict | None) -> list:
             continue      # a typo in the setting must not break searching
     # The Ollama and ComfyUI servers themselves are never legitimate
     # search results - same reasoning, same treatment.
-    for key in ("ollamaUrl", "comfyUrl"):
+    for key in ("ollamaUrl", "hubUrl", "comfyUrl"):
         host = urlparse(settings.get(key) or "").hostname
         if not host:
             continue

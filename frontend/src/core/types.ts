@@ -36,6 +36,8 @@ export interface StepsPayload { startedAt: number; serverNow: number; steps: Ste
 
 /** GET /api/settings (backend core/settings.py public()). */
 export interface SettingsDto {
+  /** 0.4.0: SLQ Hub (address + app key) or a plain Ollama */
+  aiServer: 'hub' | 'ollama'; hubUrl: string; hubKeySet: boolean; hubKeyHint: string;
   ollamaUrl: string;
   modelChat: string; modelVision: string; modelCategorise: string;
   ollamaKeepAlive: string; contextMax: number;
@@ -47,8 +49,9 @@ export interface SettingsDto {
   /** key -> environment variable that pins it (read-only in the UI) */
   envPinned: Record<string, string>;
 }
-export type SettingsPatch = Partial<Omit<SettingsDto, 'envPinned' | 'searchApiKeySet'>> & {
+export type SettingsPatch = Partial<Omit<SettingsDto, 'envPinned' | 'searchApiKeySet' | 'hubKeySet' | 'hubKeyHint'>> & {
   searchApiKey?: string | null;
+  hubKey?: string | null;
 };
 
 export interface OllamaModel {
