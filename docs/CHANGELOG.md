@@ -2,6 +2,16 @@
 
 Newest first. **ACTION REQUIRED** marks steps to do by hand.
 
+## 0.5.0 - 2026-11-06
+
+Read keys: another app can read one person's data here and change nothing.
+SLQ Dashboard uses them.
+
+**ACTION REQUIRED** (only to connect SLQ Dashboard):
+1. `cd /opt/familylog && bash update.sh`.
+2. Settings → Accounts → **Read key** for each person. Copy the key (shown once).
+3. In SLQ Dashboard: Admin → Brugere → Ret → FamilyLog-læsenøgle.
+
 ## 0.4.0 - 2026-10-22
 
 SLQ Hub as the AI server - it takes over from Ollama and ComfyUI.

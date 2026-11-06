@@ -328,6 +328,7 @@ function AccountsGroup({ meId }: { meId: number }) {
   const [role, setRole] = useState<'user' | 'family'>('user');
   const [resetFor, setResetFor] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
+  const [newKey, setNewKey] = useState<{ user: string; key: string } | null>(null);
   const load = useCallback(() => {
     api.users().then(setUsers).catch((e) => setError((e as Error).message));
     api.economyAccess().then((v) => setEconomy(new Set(v))).catch((e) => setError((e as Error).message));
@@ -386,6 +387,14 @@ function AccountsGroup({ meId }: { meId: number }) {
             ) : (
               <>
                 <button className="ghost-btn sm" onClick={() => { setResetFor(u.id); setNewPassword(''); }}>Password</button>
+                <button className="ghost-btn sm"
+                  title={u.readKey ? `Read key ...${u.readKey.hint}${u.readKey.lastUsed ? ', in use' : ', not used yet'}. A new one replaces it.` : 'Lets another app read this person\'s data, never change it'}
+                  onClick={() => void run(async () => {
+                    const { key } = await api.makeReadKey(u.id);
+                    setNewKey({ user: u.username, key });
+                  }, `New read key for ${u.username}.`)}>{u.readKey ? 'New read key' : 'Read key'}</button>
+                {u.readKey && <button className="ghost-btn sm"
+                  onClick={() => run(() => api.revokeReadKey(u.id), `${u.username}'s read key removed.`)}>Remove key</button>}
                 {u.id !== meId && <button className="ghost-btn sm" disabled={!u.online}
                   onClick={() => run(() => api.signOut(u.id), `${u.username} signed out everywhere.`)}>Sign out</button>}
                 {u.id !== meId && <button className="ghost-btn sm danger"
@@ -407,6 +416,10 @@ function AccountsGroup({ meId }: { meId: number }) {
                 onClick={() => run(() => api.createUser(name.trim(), password, role), `${name.trim()} added.`)
                   .then((ok) => { if (ok) { setName(''); setPassword(''); } })}>Add</button>
       </div>
+      {newKey && (
+        <p className="settings-note">Read key for {newKey.user}. Copy it now, it is not shown again:{' '}
+          <code>{newKey.key}</code></p>
+      )}
       {note && <p className="fma-ok">{note}</p>}
       {error && <p className="fma-error">{error}</p>}
     </Group>

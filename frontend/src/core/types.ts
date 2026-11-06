@@ -5,7 +5,10 @@ export interface AuthUser { id: number; username: string; role: 'admin' | 'user'
 export interface AuthStatus { needsSetup: boolean; user: AuthUser | null }
 export interface Meta { name: string; version: string }
 
-export interface UserDto extends AuthUser { online?: boolean }
+export interface UserDto extends AuthUser {
+  online?: boolean;
+  readKey?: { hint: string; createdAt: string; lastUsed: string | null } | null;
+}
 
 export interface HelpEntryDto {
   id: string; title: string; where: string; since: string; changed: string; body: string;

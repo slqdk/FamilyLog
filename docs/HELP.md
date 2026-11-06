@@ -223,6 +223,12 @@ one and signs that person out; **Sign out** ends their sessions;
 **Delete** removes the login - their FamilyMap reviews stay, shown as
 "slettet bruger".
 
+**Read key** (0.5.0) lets another app, such as SLQ Dashboard, read this
+person's own Økonomi, Dagbog days, FamilyMap reviews and search the places. It
+can never change anything, and it cannot open Settings, accounts, Alf or
+Cyklus. A person has one key; a new one replaces the old. The key is shown
+once. **Remove key** stops it at once.
+
 ## settings.diagnostics
 title: Diagnostics
 where: Settings

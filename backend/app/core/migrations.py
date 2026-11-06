@@ -60,10 +60,17 @@ def _c003_name(con: sqlite3.Connection) -> None:
     add_column(con, "users", "name", "TEXT NOT NULL DEFAULT ''")
 
 
+def _c004_read_keys(con: sqlite3.Connection) -> None:
+    """0.5.0: read keys for other apps (core/readkeys.py)."""
+    from . import readkeys
+    con.executescript(readkeys.SCHEMA)
+
+
 CORE: list[tuple[int, str, callable]] = [
     (1, "users and sessions", _c001_auth),
     (2, "gender per account", _c002_gender),
     (3, "a name per account", _c003_name),
+    (4, "read keys", _c004_read_keys),
 ]
 
 

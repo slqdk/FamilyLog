@@ -275,8 +275,13 @@ def test_the_map_gets_every_place_compact_gzipped_and_cached(client):
 def test_each_step_has_a_phase_for_the_animation(client, monkeypatch):
     """2.48.0: the phone animates by phase; thinking has its own."""
     from app.sections.familymap import familymap_ask as ask
-    from app.core import comfy, ollama
+    from app.core import comfy, ollama, websearch
     _run_localities(monkeypatch, TOWNS)
+
+    async def no_web(*a, **k):      # one place is too few, so it asks the web
+        return []
+
+    monkeypatch.setattr(websearch, "search", no_web)
     client.put("/api/familymap/settings", json={"chatModel": "m"})
     _place(client, "Legeland", "playground", 55.246, 9.306)
     me = client.get("/api/fm/me").json()["id"]
