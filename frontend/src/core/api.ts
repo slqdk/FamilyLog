@@ -45,6 +45,8 @@ export const api = {
   setPassword: (id: number, password: string) =>
     fetch(`/api/users/${id}/password`, send('PATCH', { password })).then(json<{ ok: boolean }>),
   signOut: (id: number) => fetch(`/api/users/${id}/sign-out`, { method: 'POST' }).then(json<{ ok: boolean }>),
+  makeReadKey: (id: number) => fetch(`/api/users/${id}/read-key`, { method: 'POST' }).then(json<{ key: string }>),
+  revokeReadKey: (id: number) => fetch(`/api/users/${id}/read-key`, { method: 'DELETE' }).then(json<{ ok: boolean }>),
   setGender: (id: number, gender: string) =>
     fetch(`/api/users/${id}`, send('PATCH', { gender })).then(json<UserDto>),
   setName: (id: number, name: string) =>

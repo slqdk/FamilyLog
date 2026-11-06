@@ -5,6 +5,22 @@ Release notes per version for the next chat, newest first. Read the newest
 
 ---
 
+## 0.5.0 - Start here
+
+Read keys (`core/readkeys.py`, core migration 4): `Authorization: Bearer flk_...`
+in the auth middleware, `_with_read_key` in main.py. One key per person, only
+the SHA-256 stored, one row in `read_keys`. All limits are in `readkeys.allows`:
+GET only, only the paths in `READ_PATHS`, and the Dagbog's `user` must be the
+key's owner. The key acts as its person, so `ledger_for` and friends apply as
+usual, and `family_allows` still runs (`/api/read/me` is the one exception, so
+a family account's key can ask who it is). A new read path is one line in
+`READ_PATHS`; check first that the GET has no side effect (that is why
+`/api/fm/places/{pid}` is not on the list: it improves a made-up name).
+Settings → Accounts: `POST/DELETE /api/users/{id}/read-key`, `readKey` on the
+user list. Tests: `tests/core/test_read_keys.py`.
+
+---
+
 ## 0.4.0 - Start here
 
 AI server = SLQ Hub (github.com/slqdk/SLQ-Hub, its `docs/API.md`) or Ollama.

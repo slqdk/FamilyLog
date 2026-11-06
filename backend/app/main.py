@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from .core import auth, comfy, db, help as help_reg, jobqueue, logs, ollama, settings
+from .core import auth, comfy, db, help as help_reg, jobqueue, logs, ollama, readkeys, settings
 from .meta import APP_DISPLAY_NAME, APP_ID, APP_VERSION
 from .sections import SECTIONS
 
@@ -57,12 +57,31 @@ async def auth_middleware(request: Request, call_next):
     path = request.url.path
     if not path.startswith("/api") or path in PUBLIC_PATHS:
         return await call_next(request)
+    bearer = request.headers.get("authorization", "")
+    if bearer.lower().startswith("bearer "):
+        return await _with_read_key(request, call_next, bearer[7:].strip())
     me = auth.session_user(request.cookies.get(auth.SESSION_COOKIE))
     if not me:
         return JSONResponse({"detail": "Not signed in."}, status_code=401)
     # A family account reaches the family page's API and nothing else -
     # decided here, once, so no endpoint has to remember.
     if not auth.family_allows(me, path):
+        return JSONResponse({"detail": "Kun familiesiden."}, status_code=403)
+    request.state.user = me
+    return await call_next(request)
+
+
+async def _with_read_key(request: Request, call_next, key: str):
+    """Another app reading (0.5.0). Every limit is in readkeys.allows; the
+    family lockout still holds on top, except for the key asking who it is."""
+    me = readkeys.user_for(key)
+    if not me:
+        return JSONResponse({"detail": "Unknown read key."}, status_code=401)
+    path = request.url.path
+    refused = readkeys.allows(me, request.method, path, request.query_params.get("user"))
+    if refused:
+        return JSONResponse({"detail": refused}, status_code=403)
+    if path != readkeys.WHO_AM_I and not auth.family_allows(me, path):
         return JSONResponse({"detail": "Kun familiesiden."}, status_code=403)
     request.state.user = me
     return await call_next(request)
@@ -109,6 +128,13 @@ def meta():
     return {"name": APP_DISPLAY_NAME, "version": APP_VERSION}
 
 
+@app.get("/api/read/me")
+def read_me(request: Request):
+    """Who a read key belongs to (0.5.0)."""
+    me = request.state.user
+    return {"id": me["id"], "username": me["username"], "name": me["name"]}
+
+
 @app.get("/api/auth/status")
 def auth_status(request: Request):
     me = auth.session_user(request.cookies.get(auth.SESSION_COOKIE))
@@ -153,6 +179,7 @@ def list_users(request: Request):
     users = auth.list_users()
     for u in users:
         u["online"] = u["id"] in online
+        u["readKey"] = readkeys.info(u["id"])
     return users
 
 
@@ -233,6 +260,23 @@ def remove_user(uid: int, request: Request):
                 s.on_user_deleted(uid)
             except Exception as exc:             # the account is gone either way
                 logs.record_exception(exc, f"{s.id}: cleaning up after a deleted account")
+    return {"ok": True}
+
+
+@app.post("/api/users/{uid}/read-key")
+def make_read_key(uid: int, request: Request):
+    """A new read key for this person (0.5.0), replacing the old one. The
+    answer is the only time the key can be seen."""
+    require_admin(request)
+    if auth.get_user(uid) is None:
+        raise HTTPException(404, "No such account.")
+    return {"key": readkeys.create(uid)}
+
+
+@app.delete("/api/users/{uid}/read-key")
+def revoke_read_key(uid: int, request: Request):
+    require_admin(request)
+    readkeys.revoke(uid)
     return {"ok": True}
 
 
